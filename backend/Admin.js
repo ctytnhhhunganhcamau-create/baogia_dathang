@@ -1,0 +1,201 @@
+// ============================================================
+// QUẢN TRỊ TRÊN SHEET: menu "📱 App", tạo tab, làm mới đệm.
+// ============================================================
+
+function onOpen() {
+  try { damBaoCotGiaVien(); } catch (e) { }
+  SpreadsheetApp.getUi().createMenu('📱 App')
+    .addItem('0. Cấp quyền cho app (Email, Telegram, nhắc hạn)', 'capQuyen')
+    .addItem('1. Khởi tạo các tab (chỉ tạo tab còn thiếu)', 'khoiTaoSheet')
+    .addItem('2. Bật tự làm mới mỗi 15 phút', 'caiLamMoiTuDong')
+    .addSeparator()
+    .addItem('Xóa bộ nhớ đệm (app lấy dữ liệu mới ngay)', 'xoaDemCoBao')
+    .addItem('Kiểm tra dữ liệu', 'kiemTraDuLieu')
+    .addSeparator()
+    .addItem('Gửi thử báo đơn (Email + Telegram)', 'thuBaoDon')
+    .addItem('Cài email nhận báo đơn (chính + kho)', 'caiEmail')
+    .addItem('Cài Telegram báo đơn (nhóm chat chính / kho)', 'caiTelegram')
+    .addItem('Bật nhắc chừa hàng hết hạn (7h sáng)', 'caiNhacChua')
+    .addSeparator()
+    .addItem('Xóa toàn bộ đơn hàng (dọn dữ liệu thử)…', 'xoaToanBoDon')
+    .addToUi();
+}
+
+// Sửa tab nào thì xóa đệm của tab đó – app thấy dữ liệu mới ở lần tải sau.
+function onEdit(e) {
+  try {
+    var ten = e && e.range && e.range.getSheet().getName();
+    if (ten === TAB.gia) {
+      demXoa('gia');
+      // Ngày cập nhật bảng giá – app hiện "Cập nhật dd/mm/yyyy" trên trang chủ.
+      PropertiesService.getScriptProperties().setProperty('CAP_NHAT_GIA', new Date().toISOString());
+    }
+    else if (ten === TAB.anh) demXoa('anh');
+    else if (ten === TAB.tonkho || ten === TAB.kho || ten === TAB.noima) demXoa('tonkho');
+    else if (ten === TAB.users) xoaDemTaiKhoan();
+    else if (ten === TAB.thuongHieu) demXoa('th');
+    else if (ten === TAB_CAI_CHUA) CacheService.getScriptCache().remove('cai_chua');
+    else if (ten === TAB_DON) demXoa('giu');
+  } catch (err) { }
+}
+
+function khoiTaoTab(ten, tieuDe) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(ten)) return false;
+  var sh = ss.insertSheet(ten);
+  sh.getRange(1, 1, 1, tieuDe.length).setValues([tieuDe]).setFontWeight('bold').setBackground('#E3F2FD');
+  sh.setFrozenRows(1);
+  return true;
+}
+
+function khoiTaoSheet() {
+  var moi = [];
+  Object.keys(TIEU_DE).forEach(function (k) { if (khoiTaoTab(TAB[k], TIEU_DE[k])) moi.push(TAB[k]); });
+  muoi();
+  var msg = moi.length ? 'Đã tạo tab: ' + moi.join(', ') : 'Đủ tab rồi, không tạo thêm.';
+  msg += '\n\nTạo tài khoản quản trị đầu tiên: ở tab "' + TAB.users + '" gõ Username, Họ tên, Vai trò = admin, ' +
+    'và mật khẩu vào cột "Mật khẩu mới". Lần đăng nhập đầu máy chủ tự mã hóa rồi xóa ô đó.';
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { Logger.log(msg); }
+}
+
+// Sheet mới tinh thì tự tạo đủ tab, khỏi phải bấm menu. Chỉ khi Sheet TRỐNG HOÀN TOÀN (mọi tab đều rỗng):
+// tab bị đổi tên, hay lỡ nhập nhầm file khác vào, vẫn báo lỗi rõ chứ không chèn tab trống lẫn vào dữ liệu.
+function sheetTrong(ss) { return ss.getSheets().every(function (s) { return s.getLastRow() === 0; }); }
+function khoiTaoLanDau() {
+  var c = CacheService.getScriptCache();
+  if (c.get('da_khoi_tao_2')) return;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (sheetTrong(ss)) {
+    Object.keys(TIEU_DE).forEach(function (k) { if (k !== 'tonkho' || !SHEET_TON_RIENG()) khoiTaoTab(TAB[k], TIEU_DE[k]); });
+    muoi();
+  }
+  try { khoiTaoSheetTon(); } catch (e) { }
+  c.put('da_khoi_tao_2', '1', 3600);
+}
+function SHEET_TON_RIENG() { return typeof SHEET_TON_KHO_ID === 'string' && !!SHEET_TON_KHO_ID; }
+
+// Sheet Tồn kho riêng: tạo tab "Tồn kho" (nếu Sheet đang trống) và tab "Hướng dẫn" cho người nhập kho.
+function khoiTaoSheetTon() {
+  if (!SHEET_TON_RIENG()) return;
+  var ss = ssTon();
+  if (sheetTrong(ss) && !ss.getSheetByName(TAB.tonkho)) {
+    var sh = ss.getSheets()[0];
+    sh.setName(TAB.tonkho);
+    sh.getRange(1, 1, 1, 5).setValues([TIEU_DE_TON]).setFontWeight('bold').setBackground('#E3F2FD');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(3, 380);
+  }
+  if (!ss.getSheetByName(TAB_HUONG_DAN_TON)) {
+    var hd = ss.insertSheet(TAB_HUONG_DAN_TON);
+    hd.getRange(1, 1, HUONG_DAN_TON.length, 2).setValues(HUONG_DAN_TON.map(function (d) { return [d, '']; }));
+    hd.getRange(1, 1).setFontWeight('bold').setFontSize(13);
+    hd.getRange(2, 2).setValue('(chưa đọc lần nào)').setFontColor('#1F8A3B').setFontWeight('bold');
+    hd.setColumnWidth(1, 560); hd.setColumnWidth(2, 520);
+  }
+}
+
+function xoaDem() {
+  demXoa('gia'); demXoa('anh2'); demXoa('tonkho'); demXoa('th'); demXoa('giu');
+  CacheService.getScriptCache().remove('cai_chua');
+  xoaDemTaiKhoan();
+}
+function xoaDemCoBao() {
+  xoaDem();
+  SpreadsheetApp.getActiveSpreadsheet().toast('Đã xóa bộ nhớ đệm. App sẽ lấy dữ liệu mới.', 'App', 5);
+}
+
+// Chạy theo lịch: đọc sẵn dữ liệu vào đệm để app mở nhanh.
+function warmCache() {
+  xoaDem();
+  quaDem('gia', docGia, TAB.gia);
+  try { var g = quaDem('gia', docGia, TAB.gia); quaDem('anh2', function () { return docAnh(g.data); }, layTabAnh, CACHE_GIAY_TON); } catch (e) { }
+  try { quaDem('tonkho', docTonKho, function () { return layTabTon(false); }, CACHE_GIAY_TON); } catch (e) { }
+}
+
+function caiLamMoiTuDong() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'warmCache') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('warmCache').timeBased().everyMinutes(15).create();
+  SpreadsheetApp.getActiveSpreadsheet().toast('Đã bật tự làm mới mỗi 15 phút.', 'App', 5);
+}
+
+// Báo nhanh: số mã, mã thiếu giá, mã tồn kho không khớp bảng giá.
+function kiemTraDuLieu() {
+  var dong = [];
+  var g = docGia();
+  if (g.status !== 'ok') dong.push('❌ Giá: ' + g.msg);
+  else {
+    var thieuGia = g.data.filter(function (p) { return !p.ny; }).length;
+    var nhom = {};
+    g.data.forEach(function (p) { nhom[p.nhom || '(trống)'] = (nhom[p.nhom || '(trống)'] || 0) + 1; });
+    dong.push('✅ Giá: ' + g.count + ' mã' + (thieuGia ? ' (' + thieuGia + ' mã chưa có giá niêm yết)' : ''));
+    dong.push('   Nhóm hàng: ' + Object.keys(nhom).map(function (k) { return k + ' ' + nhom[k]; }).join(' · '));
+    if (!g.coGiaDL) dong.push('⚠️ Không thấy cột "Giá đại lý".');
+  }
+  try {
+    var t = docTonKho();
+    if (t.status !== 'ok') dong.push('❌ Tồn kho: ' + t.msg);
+    else {
+      var maGia = {};
+      (g.data || []).forEach(function (p) { maGia[p.ma] = 1; });
+      var lech = Object.keys(t.data).filter(function (m) { return !maGia[m]; });
+      dong.push('✅ Tồn kho: ' + Object.keys(t.data).length + ' mã còn hàng');
+      if (lech.length) dong.push('⚠️ ' + lech.length + ' mã tồn kho không có trong bảng giá, ví dụ: ' + lech.slice(0, 5).join(', '));
+    }
+  } catch (e) { dong.push('❌ Tồn kho: ' + e.message); }
+  SpreadsheetApp.getUi().alert(dong.join('\n'));
+}
+
+// Cấp lại quyền: Google cho bỏ tick từng quyền khi đồng ý -> thiếu quyền "kết nối dịch vụ bên ngoài"
+// thì Telegram không chạy. Mục này bắt Google hỏi lại MỌI quyền còn thiếu, rồi thử từng quyền.
+function capQuyen() {
+  if (ScriptApp.requireAllScopes) ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
+  var kq = [];
+  try { UrlFetchApp.fetch('https://api.telegram.org', { muteHttpExceptions: true }); kq.push('✅ Kết nối Telegram'); } catch (e) { kq.push('❌ Kết nối Telegram: ' + e.message); }
+  try { kq.push('✅ Gửi email (còn ' + MailApp.getRemainingDailyQuota() + ' email hôm nay)'); } catch (e) { kq.push('❌ Gửi email: ' + e.message); }
+  try { ScriptApp.getProjectTriggers(); kq.push('✅ Hẹn giờ (nhắc chừa hàng 7h sáng)'); } catch (e) { kq.push('❌ Hẹn giờ: ' + e.message); }
+  try { if (SHEET_TON_RIENG()) { ssTon().getName(); kq.push('✅ Mở Sheet Tồn kho'); } } catch (e) { kq.push('❌ Sheet Tồn kho: ' + e.message); }
+  SpreadsheetApp.getUi().alert('Kiểm tra quyền', kq.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+// Xóa TOÀN BỘ đơn hàng (dùng khi dọn dữ liệu chạy thử). Hỏi xác nhận 2 lần; giữ dòng tiêu đề.
+// Lấy lại được bằng Tệp → Lịch sử phiên bản của Sheet nếu lỡ tay.
+function xoaToanBoDon() {
+  var ui = SpreadsheetApp.getUi(), shD = layTab(TAB_DON, false), shC = layTab(TAB_CT, false);
+  var nD = shD ? Math.max(0, shD.getLastRow() - 1) : 0, nC = shC ? Math.max(0, shC.getLastRow() - 1) : 0;
+  if (!nD && !nC) { ui.alert('Không có đơn hàng nào để xóa.'); return; }
+  if (ui.alert('Xóa toàn bộ đơn hàng?', 'Sẽ xóa ' + nD + ' đơn (tab "' + TAB_DON + '") và ' + nC + ' dòng chi tiết (tab "' + TAB_CT + '").\n' +
+    'Đại lý sẽ không còn thấy đơn cũ; hàng đang giữ cho các đơn này được trả lại tồn.\n\nKhông xóa: bảng giá, tài khoản, báo giá, nhật ký.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  var g = ui.prompt('Xác nhận lần 2', 'Gõ chữ XOA (viết hoa, không dấu) để xóa ' + nD + ' đơn hàng:', ui.ButtonSet.OK_CANCEL);
+  if (g.getSelectedButton() !== ui.Button.OK || g.getResponseText().trim() !== 'XOA') { ui.alert('Đã hủy – không xóa gì.'); return; }
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    if (shD && nD) shD.deleteRows(2, nD);
+    if (shC && nC) shC.deleteRows(2, nC);
+    var pr = PropertiesService.getScriptProperties(), all = pr.getProperties();
+    Object.keys(all).forEach(function (k) { if (/^SO_DON_/.test(k)) pr.deleteProperty(k); }); // mã đơn đánh số lại từ 001
+  } finally { lock.releaseLock(); }
+  demXoa('giu');
+  ghiNhatKy({ user: 'menu Sheet', role: 'admin' }, 'Xóa toàn bộ đơn hàng', '', nD + ' đơn, ' + nC + ' dòng chi tiết');
+  ui.alert('Đã xóa ' + nD + ' đơn hàng và ' + nC + ' dòng chi tiết.\nLỡ tay: Tệp → Lịch sử phiên bản → khôi phục bản trước.');
+}
+
+// Cùng việc trên nhưng gọi từ trang quản trị (chỉ quản trị; trang hỏi xác nhận 2 lần trước khi gọi).
+function xoaHetDonWeb(p, ti) {
+  if (!ti || ti.role !== 'admin') return { status: 'error', msg: 'Chỉ quản trị mới được xóa toàn bộ đơn.' }; // nhân viên dù có quyền nào cũng không được
+  if (chu(p.xacNhan) !== 'XOA') return { status: 'error', msg: 'Thiếu xác nhận.' };
+  var shD = layTab(TAB_DON, false), shC = layTab(TAB_CT, false);
+  var nD = shD ? Math.max(0, shD.getLastRow() - 1) : 0, nC = shC ? Math.max(0, shC.getLastRow() - 1) : 0;
+  if (!nD && !nC) return { status: 'ok', msg: 'Không có đơn hàng nào để xóa.' };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    if (shD && nD) shD.deleteRows(2, nD);
+    if (shC && nC) shC.deleteRows(2, nC);
+    var pr = PropertiesService.getScriptProperties(), all = pr.getProperties();
+    Object.keys(all).forEach(function (k) { if (/^SO_DON_/.test(k)) pr.deleteProperty(k); });
+  } finally { lock.releaseLock(); }
+  demXoa('giu');
+  ghiNhatKy(ti, 'Xóa toàn bộ đơn hàng', '', nD + ' đơn, ' + nC + ' dòng chi tiết');
+  return { status: 'ok', msg: 'Đã xóa ' + nD + ' đơn hàng và ' + nC + ' dòng chi tiết' };
+}

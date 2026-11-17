@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#D81E24"/>
+<meta name="apple-mobile-web-app-title" content="Hùng Anh CM"/>
+<title>Bảng giá Hùng Anh CM</title>
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css?v=22">
+</head>
+<body>
+
+<!-- Màn hình đăng nhập (chỉ mở khi bấm "Đăng nhập") -->
+<div id="login" class="login" hidden>
+  <button type="button" class="login-back" data-act="dong-dang-nhap"><span id="login-back-ic"></span> Xem bảng giá</button>
+  <div class="login-head">
+    <div class="logo logo-lg" id="login-logo"></div>
+    <div class="login-ten" id="login-ten"></div>
+    <div class="login-sub" id="login-sub"></div>
+  </div>
+  <form class="login-box" id="login-form" autocomplete="on">
+    <h1>Đăng nhập đại lý / nhân viên</h1>
+    <p class="login-note">Để xem giá đại lý và tồn kho.</p>
+    <label>Tài khoản<input id="inp-user" type="text" autocomplete="username" autocapitalize="none" required></label>
+    <label>Mật khẩu<input id="inp-pass" type="password" autocomplete="current-password" required></label>
+    <p class="login-err" id="login-err"></p>
+    <button type="submit" class="btn btn-chinh" id="btn-login">Đăng nhập</button>
+    <p class="login-foot" id="login-foot"></p>
+  </form>
+</div>
+
+<!-- App -->
+<div id="app" hidden>
+  <header class="topbar" id="topbar"></header>
+  <div class="acct-menu" id="acct-menu" hidden></div>
+  <div class="demo-bar" id="demo-bar" hidden>Chế độ dùng thử – dữ liệu giả, chưa nối Google Sheet</div>
+  <div class="loi-bar" id="loi-bar" hidden></div>
+  <main id="main"></main>
+  <nav class="bottom-nav" id="bottom-nav"></nav>
+</div>
+
+<!-- Chi tiết sản phẩm / bảng lọc / quản lý tài khoản -->
+<div class="sheet-nen" id="sheet-nen" hidden></div>
+<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></section>
+<div class="toast" id="toast" hidden></div>
+
+<!-- Vùng in tem giá (chỉ hiện khi in) -->
+<div id="vung-in" hidden></div>
+<style id="kieu-in"></style>
+
+<script src="config.js?v=7"></script>
+<script src="lib/qr.js?v=1"></script>
+<script src="lib/anh-gui.js?v=4"></script>
+<script src="app.js?v=35"></script>
+</body>
+</html>

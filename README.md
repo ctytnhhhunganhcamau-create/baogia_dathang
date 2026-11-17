@@ -1,1 +1,42 @@
 # baogia_dathang
+
+App bảng giá + tồn kho + đặt hàng cho **Công ty TNHH Hùng Anh Cà Mau** – 181 Lý Thường Kiệt, Khóm 7, P6, TP. Cà Mau (gạch ốp lát, thiết bị vệ sinh/bếp, sơn, ngói, keo, sàn).
+
+- Giao diện: `index.html`, `style.css`, `app.js`; trang quản trị `quan-tri.html` – chạy trên GitHub Pages.
+- Thông số riêng (tên, màu, logo, địa chỉ máy chủ, liên hệ, nhóm hàng): **`config.js`**.
+- Máy chủ: thư mục `backend/` – Google Apps Script gắn với Google Sheet của công ty.
+- Dữ liệu giá, tồn kho, tài khoản **chỉ nằm trong Google Sheet**, không nằm trong repo.
+- Tính năng giống app Hiền Nga: giá niêm yết/đại lý, tồn kho theo kho, giỏ ảnh gửi Zalo, báo giá, đơn hàng + chừa hàng, phiếu nhập kho + tuổi tồn, tem QR, phân quyền.
+
+## Ai thấy gì
+| Người dùng | Giá niêm yết | Giá đại lý | Tồn kho |
+|---|---|---|---|
+| Chưa đăng nhập | ✅ | ❌ | ❌ |
+| Đại lý (`khachhang`) | ✅ | ✅ | tối đa "50+" |
+| Nhân viên (`nv`) | ✅ | ✅ | đầy đủ |
+| Quản trị (`admin`) | ✅ | ✅ | đầy đủ + quản lý tài khoản |
+
+## Tab trong Google Sheet (không đổi tên tab)
+`Giá`, `Tồn kho`, `Kho`, `Nối mã`, `Ảnh`, `Users`. Cột đọc **theo tên tiêu đề** (xem `backend/Config.js`).
+Tồn kho từ KiotViet chỉ có *Tên hàng*, nên **Tên hàng = mã tồn kho**, tab `Nối mã` đổi sang mã `HAxxxx` của tab `Giá`.
+
+## Cài đặt lần đầu
+1. Mở Google Sheet mới → Tiện ích mở rộng → Apps Script (hoặc dùng dự án `1LHo2WV…`), dán/đẩy code `backend/`.
+2. Nhập 4 file CSV trong `du-lieu-nhap/` (không đưa lên GitHub) vào các tab `Giá`, `Tồn kho`, `Nối mã`, `Kho`.
+3. Menu **📱 App**: Khởi tạo các tab, bật tự làm mới 15 phút, tạo tài khoản admin đầu tiên.
+4. Triển khai → Ứng dụng web (Chạy với quyền của bạn, Ai cũng truy cập) → địa chỉ `/exec` điền vào `config.js` (`APPS_URL`).
+5. GitHub → Settings → Pages → branch `main`.
+
+## Xem thử trên máy
+`config.js` để trống `APPS_URL` (hoặc thêm `?demo=1`) → chạy dữ liệu giả (`demo-data.js`). Đăng nhập thử: `admin`, `nv`, `daily`, mật khẩu bất kỳ.
+```
+powershell -ExecutionPolicy Bypass -File serve.ps1   # http://localhost:3460
+```
+
+## Cập nhật máy chủ
+```
+cd backend
+clasp push
+clasp deploy -i <deploymentId>
+```
+`backend/.clasp.json` và `backend/Rieng.js` không đưa lên repo.
