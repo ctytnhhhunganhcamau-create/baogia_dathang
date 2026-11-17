@@ -32,7 +32,10 @@ window.APP_CONFIG = {
 
   // Logo thương hiệu (tên khớp cột "Hãng", không phân biệt dấu/hoa thường): thêm file vào img/hang/ rồi khai báo ở đây.
   // Hãng không có ở đây thì app hiện chữ. Logo / tên đầy đủ trong tab "Thương hiệu" của Google Sheet được ưu tiên hơn.
-  LOGO_HANG: {},
+  LOGO_HANG: {
+    'Đồng Tâm': 'img/hang/dongtam.png',
+    'Viglacera': 'img/hang/viglacera.png'
+  },
 
   NGUONG_TON_KHACH: 50,     // đại lý thấy "50+" khi tồn > 50 (máy chủ đã chặn trần 51)
 

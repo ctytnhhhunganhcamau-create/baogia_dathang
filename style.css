@@ -116,6 +116,8 @@ main{max-width:1180px;margin:0 auto;padding:14px 14px 96px}
 @media(min-width:760px){.hang-grid{grid-template-columns:repeat(6,1fr)}}
 .hang-o{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:12px 8px 8px;display:flex;flex-direction:column;align-items:center;gap:6px}
 .hang-o img{height:34px;max-width:100%;object-fit:contain}
+.hang-o{min-height:78px;justify-content:center}
+.hang-ten{height:34px;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;font-size:14px;line-height:1.1;color:var(--c);overflow-wrap:anywhere}
 .hang-o small{color:#5F6776;font-size:11px}
 .hang-o:hover{border-color:var(--c)}
 .chip-logo{background:#fff}

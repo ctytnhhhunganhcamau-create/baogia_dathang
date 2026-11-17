@@ -447,16 +447,14 @@
       return '<button type="button" class="dm-card" data-nhom="' + g.key + '"><span class="ic-wrap">' + ic(g.icon) + '</span><b>' + esc(g.ten) + '</b><small>' + (dem[g.key] || 0) + ' mã</small></button>';
     }).join('') + '</div>';
 
-    // Hãng có logo: ô logo lớn; hãng chưa có logo: giữ dạng chữ.
+    // Mọi hãng là một ô lớn: có logo thì hiện logo, chưa có logo thì hiện tên hãng thành chữ to (thêm logo sau ở config.js / tab Thương hiệu).
     var dsHang = Object.keys(hang).sort(function (a, b) { return hang[b] - hang[a]; });
-    var coLogo = dsHang.filter(logoHang), chuaLogo = dsHang.filter(function (h) { return !logoHang(h); });
-    if (dsHang.length) html += '<div class="h2">Thương hiệu</div>' +
-      (coLogo.length ? '<div class="hang-grid">' + coLogo.map(function (h) {
-        return '<button type="button" class="hang-o" data-hang-home="' + esc(h) + '"><img src="' + esc(logoHang(h)) + '" alt="' + esc(tenHang(h)) + '" loading="lazy"><small>' + esc(tenHang(h)) + ' · ' + hang[h] + ' mã</small></button>';
-      }).join('') + '</div>' : '') +
-      (chuaLogo.length ? '<div class="chips wrap"' + (coLogo.length ? ' style="margin-top:10px"' : '') + '>' + chuaLogo.map(function (h) {
-        return '<button type="button" class="chip" data-hang-home="' + esc(h) + '">' + esc(tenHang(h)) + ' <small>' + hang[h] + '</small></button>';
-      }).join('') + '</div>' : '');
+    if (dsHang.length) html += '<div class="h2">Thương hiệu</div><div class="hang-grid">' + dsHang.map(function (h) {
+      var lg = logoHang(h);
+      return '<button type="button" class="hang-o" data-hang-home="' + esc(h) + '">' +
+        (lg ? '<img src="' + esc(lg) + '" alt="' + esc(tenHang(h)) + '" loading="lazy">' : '<span class="hang-ten">' + esc(tenHang(h)) + '</span>') +
+        '<small>' + esc(tenHang(h)) + ' · ' + hang[h] + ' mã</small></button>';
+    }).join('') + '</div>';
 
     var gd = ganDay();
     if (gd.length) html += '<div class="h2">Xem gần đây <button type="button" data-nav="ganday">Tất cả</button></div><div class="gan-day">' + gd.slice(0, 10).map(function (m) {
