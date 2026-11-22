@@ -21,7 +21,7 @@ function docGia() {
     data.push({
       ma: ma, hang: o(r, 'hang'), nhom: o(r, 'nhom'), ten: o(r, 'tenHien') || o(r, 'ten'), tenGoc: o(r, 'ten'), kc: o(r, 'kc'),
       loai: o(r, 'loai'), dvt: o(r, 'dvt'), dg: o(r, 'dg'),
-      ny: soTien(r[c.ny]), dl: c.dl === undefined ? 0 : soTien(r[c.dl]), nyV: c.nyV === undefined ? 0 : soTien(r[c.nyV]), dlV: c.dlV === undefined ? 0 : soTien(r[c.dlV]), gc: o(r, 'gc'),
+      ny: soTien(r[c.ny]), dl: c.dl === undefined ? 0 : soTien(r[c.dl]), nyV: c.nyV === undefined ? 0 : soTien(r[c.nyV]), dlV: c.dlV === undefined ? 0 : soTien(r[c.dlV]), von: c.von === undefined ? 0 : soTien(r[c.von]), gc: o(r, 'gc'),
       mau: o(r, 'mau'), congNang: o(r, 'congNang'), tinhNang: o(r, 'tinhNang'),
       hoaVan: o(r, 'hoaVan'), men: o(r, 'men'), dungTich: o(r, 'dungTich')
     });
@@ -300,6 +300,8 @@ function getAll(ti) {
   if (gia.status !== 'ok') return gia;
   // Chưa đăng nhập: máy chủ KHÔNG gửi giá đại lý xuống trình duyệt.
   if (!ti) gia.data.forEach(function (p) { p.dl = 0; p.dlV = 0; });
+  // Giá vốn: CHỈ quản trị được nhận (nhân viên, đại lý, khách không bao giờ thấy).
+  if (!ti || ti.role !== 'admin') gia.data.forEach(function (p) { delete p.von; });
   var anh = {};
   try {
     // Ghép ảnh theo mã không phân biệt hoa/thường (tên file ảnh hay gõ chữ thường).

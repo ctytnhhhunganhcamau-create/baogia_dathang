@@ -477,3 +477,17 @@ body.che-xem main{padding:0 0 30px;max-width:720px}
 .chua-ten input{display:block;width:100%;margin-top:4px;padding:10px;border:1.5px solid var(--bd2);border-radius:10px;background:var(--bg1);font-size:16px}
 .chua-ten input:focus{border-color:var(--c);outline:none}
 .bb{color:var(--loi)}
+
+/* Xin sửa giá (nhân viên) */
+.tt-gia-cho{background:#FFF1DC;color:#9A5B00}.tt-gia-chot{background:#E7F5EC;color:#1F7A3A}.tt-gia-tuchoi{background:#F1F3F4;color:#6B7280}
+.gia-xin{color:#D81E24}
+.tem-dong-ten s{color:#8A93A3;font-size:11px}
+.sg-nut{border:1px solid var(--bd);background:#fff;color:var(--c);border-radius:8px;padding:5px 9px;font-size:12px;font-weight:700;margin-left:6px;white-space:nowrap}
+.sg-nut.co{background:var(--c);color:#fff;border-color:var(--c)}
+.sg-box{background:#FFF8EC;border:1px dashed #E59A1E;border-radius:12px;padding:10px;margin:2px 0 8px}
+.sg-nhap{display:flex;gap:8px;align-items:center;margin:8px 0}
+.sg-nhap input{flex:1;min-width:0;border:1px solid var(--bd);border-radius:10px;padding:9px 10px;font-size:14px;background:#fff}
+.sg-don{margin-top:12px}
+.sg-ly{display:block;margin-top:6px;font-size:13px;font-weight:600}
+.sg-ly input{display:block;width:100%;margin-top:4px;border:1px solid var(--bd);border-radius:10px;padding:9px 10px;font-size:14px;font-weight:400}
+.sg-ghi{margin-top:6px}

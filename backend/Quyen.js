@@ -9,6 +9,8 @@ var QUYEN = {
   baogia: 'Soạn báo giá (tạo, sửa, xóa, in)',
   chua: 'Duyệt chừa hàng / gia hạn / nhả hàng',
   coc: 'Ghi tiền cọc',
+  xingia: 'Xin sửa giá trong giỏ hàng (nhập tay / giảm %) – chờ quản trị chốt',
+  chotgia: 'Chốt giá khi nhân viên xin sửa giá',
   ghichu: 'Ghi chú nội bộ',
   nhapgia: 'Nhập / sửa giá',
   sanpham: 'Thêm / sửa sản phẩm (mã mới, thông tin, ảnh)',
@@ -160,9 +162,11 @@ function suaGia(p, ti) {
   var hi = timDongTieuDe(rows, COT_GIA.ma);
   if (hi < 0) return { status: 'error', msg: 'Tab Giá không có cột Mã hàng.' };
   var c = timCot(rows[hi], COT_GIA), doi = [];
+  // Giá vốn: tab Giá chưa có cột thì quản trị lưu lần đầu sẽ tự thêm vào cuối.
+  if (ti && ti.role === 'admin' && chu(p.von) && c.von === undefined) { var cotV = rows[hi].filter(function (x) { return chu(x); }).length + 1; sh.getRange(hi + 1, cotV).setValue('Giá vốn').setFontWeight('bold'); c.von = cotV - 1; }
   for (var i = hi + 1; i < rows.length; i++) {
     if (chu(rows[i][c.ma]) !== ma) continue;
-    [['ny', 'Giá niêm yết'], ['dl', 'Giá đại lý'], ['nyV', 'Giá NY / viên'], ['dlV', 'Giá ĐL / viên']].forEach(function (k) {
+    [['ny', 'Giá niêm yết'], ['dl', 'Giá đại lý'], ['nyV', 'Giá NY / viên'], ['dlV', 'Giá ĐL / viên']].concat(ti && ti.role === 'admin' ? [['von', 'Giá vốn']] : []).forEach(function (k) {
       var v = p[k[0]];
       if (v === undefined || v === '' || v === null || c[k[0]] === undefined) return;
       var moi = Math.max(0, Math.round(Number(String(v).replace(/[^\d]/g, '')) || 0)), cu = soTien(rows[i][c[k[0]]]);

@@ -277,3 +277,17 @@ details.qt-ton-hd summary{padding:14px 16px;cursor:pointer}
 @media (max-width:640px){.qt-pn-dau{flex-direction:column}.qt-tuoi-o .btn{padding:5px 10px}.qt-pn-dau .btn{width:100%}.qt-pn-form{grid-template-columns:1fr}}
 .qt-nguoi-chua{margin-top:-4px}
 .qt-nguoi-chua .mo{font-size:13px;margin-right:2px}
+
+/* Chốt giá */
+.qt-gia-box{background:#FFF8EC;border:1px solid #E59A1E;border-radius:12px;padding:12px;margin:10px 0}
+.qt-gia-box h4{margin:0 0 6px;font-size:15px;color:#9A5B00}
+.qt-gia-ly{margin:4px 0 8px;font-size:13px}
+.qt-gia-tb{width:100%;border-collapse:collapse;font-size:13px}
+.qt-gia-tb th,.qt-gia-tb td{padding:6px 5px;border-bottom:1px solid #F0DDB8;text-align:right}
+.qt-gia-tb th:first-child,.qt-gia-tb td:first-child{text-align:left}
+.qt-gia-tb input{width:96px;text-align:right;border:1px solid #D8C08A;border-radius:8px;padding:6px 7px;font-size:13px;background:#fff}
+.qt-gia-tb .am{color:#D81E24;font-weight:700}.qt-gia-tb .duong{color:#1F7A3A;font-weight:700}
+.qt-gia-tb small{color:#6B7280;display:block}
+.qt-gia-hd{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.qt-gia-hd textarea,.qt-gia-gc{width:100%;border:1px solid #D8C08A;border-radius:8px;padding:7px 9px;font-size:13px;margin-top:8px}
+.tt-gia-cho{background:#FFF1DC;color:#9A5B00}.tt-gia-chot{background:#E7F5EC;color:#1F7A3A}.tt-gia-tuchoi{background:#F1F3F4;color:#6B7280}

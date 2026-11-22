@@ -55,10 +55,12 @@
   function sao(o) { return JSON.parse(JSON.stringify(o)); }
   function tre(v) { return new Promise(function (ok) { setTimeout(function () { ok(v); }, 350); }); }
 
-  var TEN_QUYEN = { don: 'Duyệt đơn (xác nhận / từ chối / hủy)', giao: 'Kho & giao hàng (xuất kho, đang giao, đã giao)', chua: 'Duyệt chừa hàng / gia hạn / nhả hàng', coc: 'Ghi tiền cọc', ghichu: 'Ghi chú nội bộ', baogia: 'Soạn báo giá (tạo, sửa, xóa, in)', nhapgia: 'Nhập / sửa giá', sanpham: 'Thêm / sửa sản phẩm (mã mới, thông tin, ảnh)', nhapton: 'Nhập tồn kho (mở quyền sửa Sheet Tồn kho)', baocao: 'Xem báo cáo doanh số', nhatky: 'Xem nhật ký thao tác' };
+  var TEN_QUYEN = { don: 'Duyệt đơn (xác nhận / từ chối / hủy)', giao: 'Kho & giao hàng (xuất kho, đang giao, đã giao)', chua: 'Duyệt chừa hàng / gia hạn / nhả hàng', coc: 'Ghi tiền cọc', xingia: 'Xin sửa giá trong giỏ hàng (nhập tay / giảm %) – chờ quản trị chốt', chotgia: 'Chốt giá khi nhân viên xin sửa giá', ghichu: 'Ghi chú nội bộ', baogia: 'Soạn báo giá (tạo, sửa, xóa, in)', nhapgia: 'Nhập / sửa giá', sanpham: 'Thêm / sửa sản phẩm (mã mới, thông tin, ảnh)', nhapton: 'Nhập tồn kho (mở quyền sửa Sheet Tồn kho)', baocao: 'Xem báo cáo doanh số', nhatky: 'Xem nhật ký thao tác' };
   var gmailNV = {};
+  var TEN_GIA_D = { cho: 'Chờ chốt giá', chot: 'Đã chốt giá', tuchoi: 'Từ chối giá' };
+  function anVon(d, admin) { var o = sao(d); if (!admin) o.items.forEach(function (x) { delete x.von; }); return o; }
   var TT_TEN = { moi: 'Mới – chờ duyệt', giu: 'Đang chừa hàng', xacnhan: 'Đã xác nhận', danggiao: 'Đang giao', dagiao: 'Đã giao', huy: 'Đã hủy', tuchoi: 'Từ chối' };
-  var quyenNV = { nv: [] };
+  var quyenNV = { nv: ['xingia'] };
   function quyenCua(s) { return !s ? [] : s.role === 'admin' ? Object.keys(TEN_QUYEN) : s.role === 'nv' ? (quyenNV[s.username] || []) : []; }
   function coQ(s, q) { return quyenCua(s).indexOf(q) >= 0; }
   var nhatKy = [
@@ -74,6 +76,7 @@
       var ds = sao(data);
       ds.forEach(function (x) { var m = String(x.dg).match(/(\d+) viên\/thùng · ([\d.]+) m²/); if (x.dvt === 'm²' && m) { var mv = Number(m[2]) / Number(m[1]); x.m2Vien = Math.round(mv * 10000) / 10000; if (x.ny) { x.nyV = Math.round(x.ny * mv / 100) * 100; x.nyVTu = 1; } if (x.dl) { x.dlV = Math.round(x.dl * mv / 100) * 100; x.dlVTu = 1; } } });
       if (!sess) ds.forEach(function (x) { x.dl = 0; x.dlV = 0; });
+      ds.forEach(function (x) { if (sess && sess.role === 'admin') x.von = x.ny ? Math.round(x.ny * 0.72 / 1000) * 1000 : 0; else delete x.von; });
       return tre({ status: 'ok', data: ds, luc: new Date().toISOString(), capNhat: '2026-11-05T08:00:00+07:00', daDangNhap: !!sess, chuaCfg: sess ? sao(chuaCfg) : [], anh: (function () { var o = {}; ds.filter(function (x) { return x.nhom === 'Gạch'; }).forEach(function (x, i) { if (ANH_THU.length) o[x.ma] = [ANH_THU[i % ANH_THU.length]]; }); return o; })() });
     }
     if (action === 'getTonKho') {
@@ -125,29 +128,56 @@
     // Đơn hàng (giả, chỉ trong bộ nhớ)
     if (action === 'taoDon') {
       if (!sess) return tre({ status: 'error', msg: 'need_login' });
-      var tong = 0, its = (p.items || []).map(function (x) {
+      var tong = 0, tongGoc = 0, coXin = false, loiXin = '', duocXin = sess.role === 'admin' || (sess.role === 'nv' && coQ(sess, 'xingia'));
+      var its = (p.items || []).map(function (x) {
         var g = data.filter(function (d) { return d.ma === x.ma; })[0], qd = String(g.dg).match(/([\d.]+) m²/), m2 = g.dvt === 'm²' && qd ? Number(qd[1]) : 0;
-        var dg = g.dl || g.ny, luong = m2 ? x.sl * m2 : x.sl, t = Math.round(luong * dg); tong += t;
-        return { ma: g.ma, ten: g.ten, sl: x.sl, dv: m2 ? 'thùng' : g.dvt, qd: m2 ? (Math.round(luong * 100) / 100) + ' m²' : '', dongia: dg, tien: t };
+        var gia0 = g.dl || g.ny, dg = gia0, gx = Math.round(Number(x.gx) || 0), pt = Number(x.pt) || 0, giaXin = 0;
+        if (gx > 0 || pt > 0) {
+          if (!duocXin) loiXin = 'Tài khoản chưa có quyền xin sửa giá.';
+          giaXin = pt > 0 ? Math.round(g.ny * (100 - pt) / 100 / 100) * 100 : gx;
+          if (g.ny > 0 && giaXin > g.ny) loiXin = 'Mã ' + g.ma + ': giá xin không được cao hơn giá niêm yết.';
+          if (giaXin === gia0) giaXin = 0; else { dg = giaXin; coXin = true; }
+        }
+        var luong = m2 ? x.sl * m2 : x.sl, t = Math.round(luong * dg); tong += t; tongGoc += Math.round(luong * gia0);
+        return { ma: g.ma, ten: g.ten, sl: x.sl, dv: m2 ? 'thùng' : g.dvt, qd: m2 ? (Math.round(luong * 100) / 100) + ' m²' : '', dongia: dg, tien: t, dvGia: g.dvt, gia0: gia0, giaXin: giaXin, ny: g.ny || 0, von: g.ny ? Math.round(g.ny * 0.72 / 1000) * 1000 : 0 };
       });
+      if (loiXin) return tre({ status: 'error', msg: loiXin });
+      if (coXin && !String(p.lyDoGia || '').trim()) return tre({ status: 'error', msg: 'Nhập lý do xin giá (vd: khách quen, công trình lớn) để quản trị chốt.' });
+      var giaTT = coXin ? (sess.role === 'admin' ? 'chot' : 'cho') : '';
       var ma = 'HA261105-' + ('00' + (donDemo.length + 1)).slice(-3), chua = p.loai === 'chua', cfg = chuaCfg.filter(function (c) { return c.ngay === Number(p.soNgay); })[0];
       if (chua && !cfg) return tre({ status: 'error', msg: 'Số ngày chừa không hợp lệ.' });
       donDemo.unshift({ ma: ma, ngay: new Date().toISOString(), tt: 'moi', user: sess.username, ten: p.tenKH, sdt: p.sdt, hinhThuc: p.hinhThuc === 'nhan' ? 'Nhận tại kho' : 'Giao tận nơi',
         diaChi: p.diaChi, ngayCan: p.ngayCan, ghiChu: p.ghiChu, tong: tong, items: its, xuLy: '', ghiChuNB: '',
-        loai: chua ? 'chua' : '', chuaCho: chua ? String(p.chuaCho || '').trim() : '', nguoiTao: (sess.name || sess.username).replace(' (thử)', ''), soNgay: chua ? cfg.ngay : 0, coc: chua && cfg.coc ? Math.round(tong * cfg.coc / 100000) * 1000 : 0, daCoc: 0, han: '', xinGH: 0 });
-      ghiNK(sess, chua ? 'Gửi yêu cầu chừa hàng' : 'Gửi đơn', ma, its.length + ' mã');
-      return tre({ status: 'ok', ma: ma, tong: tong });
+        loai: chua ? 'chua' : '', chuaCho: chua ? String(p.chuaCho || '').trim() : '', nguoiTao: (sess.name || sess.username).replace(' (thử)', ''), soNgay: chua ? cfg.ngay : 0, coc: chua && cfg.coc ? Math.round(tong * cfg.coc / 100000) * 1000 : 0, daCoc: 0, han: '', xinGH: 0, giaTT: giaTT, tongGoc: coXin ? tongGoc : 0, lyDoGia: coXin ? String(p.lyDoGia).trim() : '', nguoiChot: giaTT === 'chot' ? sess.username : '', lucChot: '', ghiChuChot: '' });
+      ghiNK(sess, chua ? 'Gửi yêu cầu chừa hàng' : 'Gửi đơn', ma, its.length + ' mã' + (coXin ? ' · XIN GIÁ: ' + p.lyDoGia : ''));
+      return tre({ status: 'ok', ma: ma, tong: tong, giaTT: giaTT });
     }
-    if (action === 'donCuaToi') return tre({ status: 'ok', data: sao(donDemo.filter(function (d) { return d.user === (sess && sess.username); })) });
+    if (action === 'donCuaToi') return tre({ status: 'ok', data: donDemo.filter(function (d) { return d.user === (sess && sess.username); }).map(function (d) { return anVon(d, false); }) });
     if (action === 'dsDon') {
       if (!sess || (sess.role !== 'admin' && sess.role !== 'nv')) return tre({ status: 'error', msg: 'forbidden' });
-      var dem = { moi: 0, giu: 0, xacnhan: 0, danggiao: 0, dagiao: 0, huy: 0, tuchoi: 0, hetHan: 0, xinGH: 0 };
-      donDemo.forEach(function (d) { dem[d.tt]++; if (d.tt === 'giu' && d.han && new Date(d.han) < new Date()) dem.hetHan++; if (d.tt === 'giu' && d.xinGH) dem.xinGH++; });
-      return tre({ status: 'ok', data: sao(donDemo.filter(function (d) { return !p.tt || d.tt === p.tt; })), dem: dem, chuaCfg: sao(chuaCfg), quyen: quyenCua(sess), tenQuyen: TEN_QUYEN });
+      var dem = { moi: 0, giu: 0, xacnhan: 0, danggiao: 0, dagiao: 0, huy: 0, tuchoi: 0, hetHan: 0, xinGH: 0, xinGia: 0 };
+      donDemo.forEach(function (d) { dem[d.tt]++; if (d.giaTT === 'cho' && (d.tt === 'moi' || d.tt === 'giu')) dem.xinGia++; if (d.tt === 'giu' && d.han && new Date(d.han) < new Date()) dem.hetHan++; if (d.tt === 'giu' && d.xinGH) dem.xinGH++; });
+      return tre({ status: 'ok', data: donDemo.filter(function (d) { return !p.tt || d.tt === p.tt; }).map(function (d) { return anVon(d, sess.role === 'admin'); }), dem: dem, chuaCfg: sao(chuaCfg), quyen: quyenCua(sess), tenQuyen: TEN_QUYEN });
+    }
+    if (action === 'chotGia') {
+      if (!sess || !coQ(sess, 'chotgia')) return tre({ status: 'error', msg: 'forbidden' });
+      var dg = donDemo.filter(function (d) { return d.ma === p.ma; })[0];
+      if (!dg || dg.giaTT !== 'cho') return tre({ status: 'error', msg: 'Đơn này không ở trạng thái chờ chốt giá.' });
+      var tongCu = dg.tong, tongMoi = 0, tuchoi = p.quyetDinh === 'tuchoi', ghi = p.gia || {};
+      dg.items.forEach(function (x) {
+        var luong = x.qd ? parseFloat(String(x.qd)) : x.sl, g = tuchoi ? x.gia0 : (ghi[x.ma] !== undefined && ghi[x.ma] !== '' ? Math.max(0, Math.round(Number(ghi[x.ma]))) : (x.giaXin || x.gia0));
+        x.dongia = g; x.tien = Math.round(luong * g); tongMoi += x.tien;
+      });
+      dg.tong = tongMoi; dg.giaTT = tuchoi ? 'tuchoi' : 'chot'; dg.nguoiChot = sess.username; dg.lucChot = new Date().toISOString(); dg.ghiChuChot = p.ghiChu || '';
+      ghiNK(sess, 'Chốt giá', dg.ma, (tuchoi ? 'từ chối' : 'đồng ý') + ' · tổng ' + tongCu + ' → ' + tongMoi);
+      var msgG = 'Đơn ' + dg.ma + ': ' + (tuchoi ? 'đã từ chối giá, về giá gốc ' : 'đã chốt giá, tổng ') + tongMoi.toLocaleString('vi-VN') + 'đ';
+      if (p.xacNhan && dg.tt === 'moi') { dg.tt = dg.loai === 'chua' ? 'giu' : 'xacnhan'; if (dg.tt === 'giu') { dg.han = new Date(Date.now() + dg.soNgay * 86400000).toISOString(); } msgG += ' – đã duyệt đơn'; }
+      return tre({ status: 'ok', tong: tongMoi, msg: msgG });
     }
     if (action === 'capNhatDon') {
       var dd = donDemo.filter(function (d) { return d.ma === p.ma; })[0];
       if (!dd) return tre({ status: 'error', msg: 'Không thấy đơn' });
+      if (dd.giaTT === 'cho' && ['giu', 'xacnhan', 'danggiao', 'dagiao'].indexOf(p.tt) >= 0) return tre({ status: 'error', msg: 'Đơn đang chờ chốt giá – chốt (hoặc từ chối) giá trước khi duyệt đơn.' });
       var noiBo = sess.role === 'admin' || sess.role === 'nv';
       if (!noiBo && !(dd.user === sess.username && p.tt === 'huy' && dd.tt === 'moi')) return tre({ status: 'error', msg: 'forbidden' });
       var qTT = p.tt === 'giu' || dd.tt === 'giu' || (dd.loai === 'chua' && ['moi', 'huy', 'tuchoi'].indexOf(dd.tt) >= 0) ? 'chua' : ((p.tt === 'danggiao' || p.tt === 'dagiao') && (dd.tt === 'xacnhan' || dd.tt === 'danggiao')) ? 'giao' : 'don';

@@ -16,6 +16,12 @@ App bảng giá + tồn kho + đặt hàng cho **Công ty TNHH Hùng Anh Cà Mau
 | Nhân viên (`nv`) | ✅ | ✅ | đầy đủ |
 | Quản trị (`admin`) | ✅ | ✅ | đầy đủ + quản lý tài khoản |
 
+## Xin sửa giá (nhân viên) → quản trị chốt
+- Nhân viên có quyền **Xin sửa giá** thấy nút **Sửa giá** trong giỏ hàng: nhập giá tay hoặc giảm % trên giá niêm yết (từng dòng hoặc cả đơn), bắt buộc ghi lý do.
+- Đơn gửi đi ở trạng thái **Chờ chốt giá** (hàng vẫn được giữ). Quản trị (hoặc nhân viên có quyền **Chốt giá**) mở đơn: đồng ý, sửa giá từng dòng, hoặc từ chối (về giá gốc). Chưa chốt thì chưa duyệt được đơn.
+- Giá vốn (cột **Giá vốn** trong tab Giá) chỉ quản trị thấy: hiện biên lợi nhuận khi chốt và cảnh báo khi bán dưới vốn. Máy chủ không bao giờ gửi giá vốn cho nhân viên / đại lý.
+- Máy chủ tự tính lại tiền theo giá xin / giá chốt, không tin con số từ điện thoại. Mọi bước ghi vào Nhật ký.
+
 ## Tab trong Google Sheet (không đổi tên tab)
 `Giá`, `Tồn kho`, `Kho`, `Nối mã`, `Ảnh`, `Users`. Cột đọc **theo tên tiêu đề** (xem `backend/Config.js`).
 Tồn kho từ KiotViet chỉ có *Tên hàng*, nên **Tên hàng = mã tồn kho**, tab `Nối mã` đổi sang mã `HAxxxx` của tab `Giá`.

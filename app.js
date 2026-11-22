@@ -786,7 +786,7 @@
     nut.disabled = true; nut.textContent = 'Đang đăng nhập…'; $('login-err').textContent = '';
     api('login', { username: u, password: pw }, true).then(function (res) {
       if (!res || res.status !== 'ok') throw new Error((res && res.msg) || 'Đăng nhập thất bại');
-      S.sess = { token: res.token, role: res.role, username: res.username, name: res.name, tenCty: res.tenCty, sdt: res.sdt || '', diaChi: res.diaChi || '' };
+      S.sess = { token: res.token, role: res.role, username: res.username, name: res.name, tenCty: res.tenCty, sdt: res.sdt || '', diaChi: res.diaChi || '', quyen: res.quyen || [] };
       LS.set('sess', S.sess); S.ton = null; S.tonLoi = '';
       $('inp-pass').value = '';
       hienApp();
@@ -826,6 +826,7 @@
   // GIỎ HÀNG + ĐƠN HÀNG (GĐ1): đại lý chọn mã -> gửi đơn -> quản trị duyệt trên trang quản trị.
   // Giỏ chỉ lưu trên máy. Giá + thành tiền hiện ở đây chỉ để xem trước: máy chủ tự tính lại khi gửi.
   // ============================================================
+  var TEN_GIA = { cho: 'Chờ chốt giá', chot: 'Đã chốt giá', tuchoi: 'Giá về gốc' };
   var TEN_TT = { moi: 'Chờ duyệt', giu: 'Đang chừa hàng', xacnhan: 'Đã xác nhận', danggiao: 'Đang giao', dagiao: 'Đã giao', huy: 'Đã hủy', tuchoi: 'Từ chối' };
   S.gio = LS.get('giohang') || [];      // [{ma, sl}]  sl = số thùng (gạch tính m²) hoặc số đơn vị
   function luuGio() { LS.set('giohang', S.gio); }
@@ -849,11 +850,31 @@
     return s;
   }
   function giaDon(p) { return p.dl > 0 ? p.dl : p.ny; }
+  // ---- Xin sửa giá (nhân viên): giá tay hoặc % giảm trên giá niêm yết; gửi đơn -> quản trị chốt ----
+  function lam100(x) { return Math.round(Number(x) / 100) * 100; }
+  function coXinGia() { var s = S.sess; return !!s && (s.role === 'admin' || (s.role === 'nv' && (s.quyen || []).indexOf('xingia') >= 0)); }
+  function giaXinCua(p, it) { // giá xin của 1 dòng giỏ (0 = không xin)
+    if (!p || !it || !coXinGia()) return 0;
+    var g = it.gx > 0 ? Math.round(it.gx) : (it.pt > 0 && p.ny > 0 ? lam100(p.ny * (100 - it.pt) / 100) : 0);
+    return g > 0 && g !== giaDon(p) ? g : 0;
+  }
+  function giaDong(p, it) { return giaXinCua(p, it) || giaDon(p); }
+  function coXinTrongGio() { return S.gio.some(function (it) { return giaXinCua(S.byMa[it.ma], it) > 0; }); }
+  function pcGiam(p, g) { return p.ny > 0 && g > 0 ? Math.round((1 - g / p.ny) * 1000) / 10 : 0; }
+  S.sgMo = -1; S.sgKieu = 'tay';
+  function htmlSuaGia(p, it, i) {
+    var kieu = S.sgKieu, dv = p.dvt ? '/' + esc(p.dvt) : '';
+    return '<div class="sg-box"><div class="chips"><button type="button" class="chip' + (kieu === 'tay' ? ' on' : '') + '" data-sg-kieu="tay">Nhập giá tay</button>' +
+      '<button type="button" class="chip' + (kieu === 'pt' ? ' on' : '') + '" data-sg-kieu="pt">Giảm %</button></div>' +
+      '<div class="sg-nhap"><input id="sg-gt" inputmode="decimal" placeholder="' + (kieu === 'tay' ? 'Giá bán (đ' + dv + ')' : '% giảm so với giá niêm yết') + '" value="' + (kieu === 'tay' ? (it.gx || '') : (it.pt || '')) + '">' +
+      '<button type="button" class="btn btn-chinh btn-nho" data-sg-ap="' + i + '">Áp dụng</button><button type="button" class="btn btn-vien btn-nho" data-sg-bo="' + i + '">Bỏ</button></div>' +
+      '<small class="mo">Giá niêm yết ' + (p.ny > 0 ? tien(p.ny) + dv : 'chưa có') + ' · giá đại lý ' + (p.dl > 0 ? tien(p.dl) + dv : 'chưa có') + '. Giá xin phải được quản trị chốt.</small></div>';
+  }
   function donViDat(p) { var qd = quyDoi(p); return qd && /^m(2|²)$/i.test(String(p.dvt || '').trim()) ? 'thùng' : (p.dvt || 'đơn vị'); }
-  function tienDong(p, sl) {
+  function tienDong(p, sl, it) {
     var qd = quyDoi(p), laM2 = qd && /^m(2|²)$/i.test(String(p.dvt || '').trim());
     var luong = laM2 ? sl * qd.m2 : sl;
-    return { tien: Math.round(luong * giaDon(p)), qd: laM2 ? so(Math.round(luong * 100) / 100) + ' m²' : '' };
+    return { tien: Math.round(luong * (it ? giaDong(p, it) : giaDon(p))), qd: laM2 ? so(Math.round(luong * 100) / 100) + ' m²' : '' };
   }
   function htmlDatHang(p) {
     var co = S.gio.filter(function (x) { return x.ma === p.ma; })[0];
@@ -869,7 +890,7 @@
     else if (it) it.sl = sl; else S.gio.push({ ma: ma, sl: sl });
     luuGio(); veTopbar();
   }
-  function tongGio() { return S.gio.reduce(function (t, it) { var p = S.byMa[it.ma]; return t + (p ? tienDong(p, it.sl).tien : 0); }, 0); }
+  function tongGio() { return S.gio.reduce(function (t, it) { var p = S.byMa[it.ma]; return t + (p ? tienDong(p, it.sl, it).tien : 0); }, 0); }
 
   // Thẻ trong giỏ: gio = đang chọn hàng · dang = đơn đang xử lý / đang giữ hàng · xong = lịch sử (đã giao, hủy, từ chối)
   var TT_DANG = { moi: 1, giu: 1, xacnhan: 1, danggiao: 1 };
@@ -895,11 +916,11 @@
     var phu = gioNgay(d.ngay) + ' · ' + d.items.length + ' mã' + (d.loai === 'chua' ? (d.chuaCho ? ' · ' + esc(d.chuaCho) : '') + ' · ' + (d.tt === 'giu' && d.han ? 'giữ tới ' + ngay(d.han).slice(0, 5) + ' (' + conLai(d.han) + ')' : 'chừa ' + d.soNgay + ' ngày') : '');
     var h = '<div class="dn' + (mo ? ' mo-ra' : '') + (het ? ' het' : '') + '"><button type="button" class="dn-dau" data-dn="' + esc(d.ma) + '">' +
       '<span class="dn-trai"><span class="dn-ma">' + esc(d.ma) + (d.loai === 'chua' ? ' ' + ic('lock', 'ic-xs') : '') + '</span><small>' + phu + '</small></span>' +
-      '<span class="dn-phai"><b>' + tien(d.tong) + '</b><span class="tt tt-' + d.tt + '">' + (TEN_TT[d.tt] || d.tt) + '</span></span></button>';
+      '<span class="dn-phai"><b>' + tien(d.tong) + '</b><span class="tt tt-' + d.tt + '">' + (TEN_TT[d.tt] || d.tt) + '</span>' + (d.giaTT ? '<span class="tt tt-gia-' + d.giaTT + '">' + TEN_GIA[d.giaTT] + '</span>' : '') + '</span></button>';
     if (mo) {
       h += '<div class="dn-ct">' + htmlChuaDon(d) +
         '<div class="dn-hang">' + d.items.map(function (x) {
-          return '<div><span>' + esc(x.ten || x.ma) + '<small>' + esc(x.ma) + '</small></span><b>' + so(x.sl) + ' ' + esc(x.dv) + (x.qd ? '<small>' + esc(x.qd) + '</small>' : '') + '</b></div>';
+          return '<div><span>' + esc(x.ten || x.ma) + '<small>' + esc(x.ma) + (x.dongia ? ' · ' + (x.gia0 && x.gia0 !== x.dongia ? '<s>' + tien(x.gia0) + '</s> ' : '') + '<b class="gia-xin">' + tien(x.dongia) + '</b>' + (x.dvGia ? '/' + esc(x.dvGia) : '') + (d.giaTT === 'cho' && x.giaXin ? ' (giá xin)' : '') : '') + '</small></span><b>' + so(x.sl) + ' ' + esc(x.dv) + (x.qd ? '<small>' + esc(x.qd) + '</small>' : '') + '</b></div>';
         }).join('') + '</div>' +
         '<div class="dn-chan"><small>' + esc(d.hinhThuc) + (d.ngayCan ? ' · cần ' + esc(d.ngayCan) : '') + '</small><span>' +
         (d.tt === 'moi' ? '<button type="button" class="btn btn-vien btn-nho" data-huy-don="' + esc(d.ma) + '">Hủy đơn</button>' : '') +
@@ -926,13 +947,19 @@
     if (!S.gio.length) html += '<div class="trong">' + ic('cart') + '<b>Giỏ hàng trống</b>Mở sản phẩm → nhập số lượng → "Thêm vào giỏ".</div>';
     else {
       html += '<div class="tem-ds">' + S.gio.map(function (it, i) {
-        var p = S.byMa[it.ma], t = p ? tienDong(p, it.sl) : { tien: 0, qd: '' };
-        return '<div class="tem-dong"><div class="tem-dong-ten"><b>' + esc(p ? p._ten : it.ma) + '</b><small>' + esc(it.ma) + (p && giaDon(p) ? ' · ' + tien(giaDon(p)) + (p.dvt ? '/' + esc(p.dvt) : '') : '') + '</small>' +
+        var p = S.byMa[it.ma], t = p ? tienDong(p, it.sl, it) : { tien: 0, qd: '' }, gx = giaXinCua(p, it);
+        return '<div class="tem-dong"><div class="tem-dong-ten"><b>' + esc(p ? p._ten : it.ma) + '</b><small>' + esc(it.ma) + (p && giaDon(p) ? ' · ' + (gx ? '<s>' + tien(giaDon(p)) + '</s> <b class="gia-xin">' + tien(gx) + '</b> (−' + so(pcGiam(p, gx)) + '% so với NY)' : tien(giaDon(p))) + (p.dvt ? '/' + esc(p.dvt) : '') : '') + '</small>' +
           ' <small class="gio-tt">= ' + (t.tien ? tien(t.tien) : 'Chờ báo giá') + (t.qd ? ' · ' + t.qd : '') + '</small></div>' +
           '<div class="tem-sl"><button type="button" data-gio-sl="' + i + '" data-d="-1" aria-label="Bớt">−</button><input class="gio-o" inputmode="decimal" data-gio-o="' + i + '" value="' + it.sl + '"><button type="button" data-gio-sl="' + i + '" data-d="1" aria-label="Thêm">＋</button></div>' +
-          '<span class="gio-dv">' + esc(p ? donViDat(p) : '') + '</span></div>';
+          '<span class="gio-dv">' + esc(p ? donViDat(p) : '') + '</span>' + (coXinGia() && p ? '<button type="button" class="sg-nut' + (gx ? ' co' : '') + '" data-sg-mo="' + i + '">' + (gx ? 'Đổi giá' : 'Sửa giá') + '</button>' : '') + '</div>' + (S.sgMo === i && p ? htmlSuaGia(p, it, i) : '');
       }).join('') + '</div>';
       html += '<p class="mo gio-ghi">Giá đại lý của tài khoản · công ty xác nhận lại khi duyệt đơn.</p>';
+      if (coXinGia()) {
+        html += '<div class="sg-don"><div class="sec">Xin sửa giá</div><div class="sg-nhap"><input id="sg-dh" inputmode="decimal" placeholder="% giảm cho cả đơn (so với giá niêm yết)"><button type="button" class="btn btn-vien btn-nho" data-sg-dh="1">Áp dụng cả đơn</button></div>';
+        if (coXinTrongGio()) html += '<label class="sg-ly">Lý do xin giá <b>*</b><input data-don="lyDoGia" value="' + esc(f.lyDoGia || '') + '" placeholder="Vd: khách quen, công trình lớn, đối thủ báo thấp hơn" autocomplete="off"></label>' +
+          '<p class="mo sg-ghi">Đơn sẽ ở trạng thái <b>Chờ chốt giá</b>: quản trị xem giá xin rồi đồng ý, sửa giá hoặc từ chối. Hàng vẫn được giữ trong lúc chờ.</p>';
+        html += '</div>';
+      }
       var chua = f.loai === 'chua', nNgay = Number(f.soNgay) || (S.chuaCfg[0] || {}).ngay || 3, coc = cocDuKien(tongGio(), nNgay);
       html += '<div class="sec">Loại đơn</div><div class="chips">' +
         [['', 'Đặt hàng'], ['chua', 'Chừa hàng (giữ hàng)']].map(function (h) { return '<button type="button" class="chip' + ((f.loai || '') === h[0] ? ' on' : '') + '" data-don-loai="' + h[0] + '">' + h[1] + '</button>'; }).join('') + '</div>';
@@ -949,24 +976,28 @@
         '<label>Ghi chú<input data-don="ghiChu" value="' + esc(f.ghiChu || '') + '" placeholder="Giao buổi sáng, gọi trước…"></label></div>';
     }
     html += '</div>' + (S.gio.length ? '<div class="sh-foot"><div class="gio-chot"><small>' + S.gio.length + ' mã</small><b>' + tien(tongGio()) + '</b></div>' +
-      '<button type="button" class="btn btn-chinh" data-act="gui-don">' + ((LS.get('don_nhap') || {}).loai === 'chua' ? 'Gửi yêu cầu chừa' : 'Gửi đơn') + '</button></div>' : '');
+      '<button type="button" class="btn btn-chinh" data-act="gui-don">' + (coXinTrongGio() ? 'Gửi đơn xin giá' : (LS.get('don_nhap') || {}).loai === 'chua' ? 'Gửi yêu cầu chừa' : 'Gửi đơn') + '</button></div>' : '');
     var cuon = $('sheet').getAttribute('data-loai') === 'gio' ? $('sheet').scrollTop : 0;
     moSheet(html, 'gio');
     $('sheet').scrollTop = cuon;
   }
   function guiDon(nut) {
+    var fd0 = LS.get('don_nhap') || {}; // đồng bộ ô đang gõ dở (chưa kịp 'change') trước khi gửi
+    document.querySelectorAll('[data-don]').forEach(function (o) { fd0[o.getAttribute('data-don')] = o.value; }); LS.set('don_nhap', fd0);
     var f = LS.get('don_nhap') || {}, s = S.sess || {};
-    var d = { items: S.gio.map(function (x) { return { ma: x.ma, sl: x.sl }; }), hinhThuc: f.hinhThuc || 'giao',
+    var xin = coXinGia() && coXinTrongGio();
+    var d = { items: S.gio.map(function (x) { var o = { ma: x.ma, sl: x.sl }; if (xin && giaXinCua(S.byMa[x.ma], x)) { if (x.gx > 0) o.gx = x.gx; else o.pt = x.pt; } return o; }), lyDoGia: xin ? String(f.lyDoGia || '').trim() : '', hinhThuc: f.hinhThuc || 'giao',
       tenKH: f.tenKH != null ? f.tenKH : (s.tenCty || s.name || ''), sdt: f.sdt != null ? f.sdt : (s.sdt || ''),
       diaChi: f.diaChi != null ? f.diaChi : (s.diaChi || ''), ngayCan: f.ngayCan || '', ghiChu: f.ghiChu || '',
       loai: f.loai === 'chua' ? 'chua' : '', soNgay: f.loai === 'chua' ? (Number(f.soNgay) || (S.chuaCfg[0] || {}).ngay || 3) : 0, chuaCho: f.loai === 'chua' ? String(f.chuaCho || '').trim() : '' };
     if (d.hinhThuc === 'giao' && !String(d.diaChi).trim()) { toast('Nhập địa chỉ giao hàng'); return; }
+    if (xin && !d.lyDoGia) { toast('Nhập lý do xin giá'); return; }
     nut.disabled = true; nut.textContent = 'Đang gửi…';
     api('taoDon', d, true).then(function (res) {
       if (!res || res.status !== 'ok') throw new Error((res && res.msg) || 'lỗi');
       S.gio = []; luuGio(); LS.set('don_nhap', { hinhThuc: d.hinhThuc, tenKH: d.tenKH, sdt: d.sdt, diaChi: d.diaChi });
-      veTopbar(); toast((d.loai ? 'Đã gửi yêu cầu chừa hàng ' : 'Đã gửi đơn ') + res.ma + ' – công ty sẽ xác nhận sớm'); S.donMo = res.ma; moDonCuaToi();
-    }).catch(function (e) { nut.disabled = false; nut.textContent = d.loai ? 'Gửi yêu cầu chừa' : 'Gửi đơn'; toast('Chưa gửi được: ' + loiDeHieu(e)); });
+      veTopbar(); toast((d.loai ? 'Đã gửi yêu cầu chừa hàng ' : 'Đã gửi đơn ') + res.ma + (res.giaTT === 'cho' ? ' – chờ quản trị chốt giá' : ' – công ty sẽ xác nhận sớm')); S.donMo = res.ma; moDonCuaToi();
+    }).catch(function (e) { nut.disabled = false; nut.textContent = xin ? 'Gửi đơn xin giá' : d.loai ? 'Gửi yêu cầu chừa' : 'Gửi đơn'; toast('Chưa gửi được: ' + loiDeHieu(e)); });
   }
   function moDonCuaToi() { S.donToi = null; S.donToiLoi = ''; moGioHang('dang'); }
   function moDonCuaToiCu() {
@@ -1318,7 +1349,7 @@
 
   // ---------- Bấm (một chỗ xử lý cho cả app) ----------
   document.addEventListener('click', function (e) {
-    var el = e.target.closest('[data-act],[data-sp],[data-nhom],[data-nav],[data-hang],[data-hang-home],[data-loc],[data-sort],[data-anh],[data-user],[data-tem-kho],[data-tem-sl],[data-loc-kc],[data-gio-sl],[data-don-ht],[data-huy-don],[data-don-loai],[data-don-ngay],[data-xin-mo],[data-xin-ngay],[data-gio-tab],[data-dn],[data-dat-lai],[data-anh-tick],[data-ga-dt],[data-ga-cl],[data-ga-bo]');
+    var el = e.target.closest('[data-act],[data-sp],[data-nhom],[data-nav],[data-hang],[data-hang-home],[data-loc],[data-sort],[data-anh],[data-user],[data-tem-kho],[data-tem-sl],[data-loc-kc],[data-gio-sl],[data-sg-mo],[data-sg-kieu],[data-sg-ap],[data-sg-bo],[data-sg-dh],[data-don-ht],[data-huy-don],[data-don-loai],[data-don-ngay],[data-xin-mo],[data-xin-ngay],[data-gio-tab],[data-dn],[data-dat-lai],[data-anh-tick],[data-ga-dt],[data-ga-cl],[data-ga-bo]');
     var menu = $('acct-menu');
     if (!menu.hidden && !e.target.closest('#acct-menu') && !(el && el.getAttribute('data-act') === 'menu')) menu.hidden = true;
     if (!el) { if (e.target.id === 'sheet-nen') dongSheet(); return; }
@@ -1339,6 +1370,23 @@
     if (el.hasAttribute('data-hang-home')) return diToi('all', el.getAttribute('data-hang-home'));
     if (el.hasAttribute('data-hang')) { S.hang = el.getAttribute('data-hang'); S.trang = 1; S.loc = {}; var hh = docHash(); hh.h = S.hang; ghiHash(hh, true); veTrang(); return; }
     if (el.hasAttribute('data-gio-sl')) { var gi = S.gio[Number(el.getAttribute('data-gio-sl'))]; if (gi) themGio(gi.ma, gi.sl + Number(el.getAttribute('data-d'))); moGioHang(); return; }
+    if (el.hasAttribute('data-sg-mo')) { var im = Number(el.getAttribute('data-sg-mo')); S.sgMo = S.sgMo === im ? -1 : im; var itm = S.gio[im]; S.sgKieu = itm && itm.pt > 0 ? 'pt' : 'tay'; moGioHang(); return; }
+    if (el.hasAttribute('data-sg-kieu')) { S.sgKieu = el.getAttribute('data-sg-kieu'); moGioHang(); return; }
+    if (el.hasAttribute('data-sg-bo')) { var ib = S.gio[Number(el.getAttribute('data-sg-bo'))]; if (ib) { delete ib.gx; delete ib.pt; luuGio(); } S.sgMo = -1; moGioHang(); return; }
+    if (el.hasAttribute('data-sg-ap')) {
+      var ia = S.gio[Number(el.getAttribute('data-sg-ap'))], pa = ia && S.byMa[ia.ma], va = Number(String($('sg-gt') ? $('sg-gt').value : '').replace(/[^\d.,]/g, '').replace(',', '.'));
+      if (!ia || !pa) return;
+      if (!(va > 0)) { toast(S.sgKieu === 'pt' ? 'Nhập % giảm' : 'Nhập giá bán'); return; }
+      if (S.sgKieu === 'pt') { if (va >= 100) { toast('% giảm phải nhỏ hơn 100'); return; } if (!(pa.ny > 0)) { toast('Mã này chưa có giá niêm yết – nhập giá tay'); return; } ia.pt = va; delete ia.gx; }
+      else { if (pa.ny > 0 && va > pa.ny) { toast('Giá xin không được cao hơn giá niêm yết ' + tien(pa.ny)); return; } ia.gx = Math.round(va); delete ia.pt; }
+      luuGio(); S.sgMo = -1; moGioHang(); return;
+    }
+    if (el.hasAttribute('data-sg-dh')) {
+      var vd = Number(String($('sg-dh') ? $('sg-dh').value : '').replace(/[^\d.,]/g, '').replace(',', '.'));
+      if (!(vd > 0 && vd < 100)) { toast('Nhập % giảm từ 0 đến 100'); return; }
+      var dem = 0; S.gio.forEach(function (x) { var q = S.byMa[x.ma]; if (q && q.ny > 0) { x.pt = vd; delete x.gx; dem++; } });
+      luuGio(); toast(dem ? 'Đã áp dụng giảm ' + vd + '% cho ' + dem + ' mã' : 'Các mã chưa có giá niêm yết'); moGioHang(); return;
+    }
     if (el.hasAttribute('data-don-ht')) { var fn = LS.get('don_nhap') || {}; fn.hinhThuc = el.getAttribute('data-don-ht'); LS.set('don_nhap', fn); moGioHang(); return; }
     if (el.hasAttribute('data-gio-tab')) { S.gioTab = el.getAttribute('data-gio-tab'); moGioHang(); $('sheet').scrollTop = 0; return; }
     if (el.hasAttribute('data-dn')) { var mdn = el.getAttribute('data-dn'); S.donMo = S.donMo === mdn ? '' : mdn; moGioHang(); return; }
@@ -1498,7 +1546,7 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden && !DEMO) kiemTraBanMoi(); });
   if (DEMO) {
     var sc = document.createElement('script');
-    sc.src = 'demo-data.js?v=19'; sc.onload = batDau;
+    sc.src = 'demo-data.js?v=20'; sc.onload = batDau;
     sc.onerror = function () { document.body.innerHTML = '<p style="padding:20px">Chưa cấu hình APPS_URL trong config.js.</p>'; };
     document.head.appendChild(sc);
   } else batDau();

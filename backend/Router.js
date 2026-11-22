@@ -47,6 +47,7 @@ function xuLy(p) {
       case 'donCuaToi':  return ti ? donCuaToi(ti) : { status: 'error', msg: 'need_login' };
       case 'dsDon':      return ti && (ti.role === 'admin' || ti.role === 'nv') ? dsDon(p, ti) : cam;
       case 'capNhatDon': return ti ? capNhatDon(p, ti) : { status: 'error', msg: 'need_login' };
+      case 'chotGia':    return coQuyen(ti, 'chotgia') ? chotGia(p, ti) : cam;
       // Chừa hàng (GĐ2)
       case 'xinGiaHan':  return ti ? xinGiaHan(p, ti) : { status: 'error', msg: 'need_login' };
       // Phân quyền + nhật ký + báo cáo (GĐ3)
@@ -55,7 +56,7 @@ function xuLy(p) {
       case 'nhatKy':     return ti && (ti.role === 'admin' || ti.role === 'nv') && (p.maDon || coQuyen(ti, 'nhatky')) ? nhatKy(p) : cam;
       case 'baoCao':     return coQuyen(ti, 'baocao') ? baoCao(p) : cam;
       case 'suaGia':     return coQuyen(ti, 'nhapgia') ? suaGia(p, ti) : cam;
-      case 'docSanPham': return coQuyen(ti, 'sanpham') ? docSanPham(p) : cam;
+      case 'docSanPham': return coQuyen(ti, 'sanpham') ? docSanPham(p, ti) : cam;
       case 'luuSanPham': return coQuyen(ti, 'sanpham') ? luuSanPham(p, ti) : cam;
       case 'dsSanPhamAn': return coQuyen(ti, 'sanpham') ? dsSanPhamAn() : cam;
       case 'maKhoThieuGia': return coQuyen(ti, 'sanpham') ? maKhoThieuGia() : cam;
