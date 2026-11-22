@@ -152,7 +152,7 @@
       ghiNK(sess, chua ? 'Gửi yêu cầu chừa hàng' : 'Gửi đơn', ma, its.length + ' mã' + (coXin ? ' · XIN GIÁ: ' + p.lyDoGia : ''));
       return tre({ status: 'ok', ma: ma, tong: tong, giaTT: giaTT });
     }
-    if (action === 'donCuaToi') return tre({ status: 'ok', data: donDemo.filter(function (d) { return d.user === (sess && sess.username); }).map(function (d) { return anVon(d, false); }) });
+    if (action === 'donCuaToi') return tre({ status: 'ok', data: donDemo.filter(function (d) { return d.user === (sess && sess.username); }).map(function (d) { return anVon(d, false); }), quyen: quyenCua(sess) });
     if (action === 'dsDon') {
       if (!sess || (sess.role !== 'admin' && sess.role !== 'nv')) return tre({ status: 'error', msg: 'forbidden' });
       var dem = { moi: 0, giu: 0, xacnhan: 0, danggiao: 0, dagiao: 0, huy: 0, tuchoi: 0, hetHan: 0, xinGH: 0, xinGia: 0 };

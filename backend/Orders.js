@@ -230,7 +230,7 @@ function docDon(loc, gioiHan) {
 function boDong(d) { delete d._dong; return d; }
 
 function donCuaToi(ti) {
-  return { status: 'ok', data: docDon({ user: ti.user }, 100).map(boDong), chuaCfg: docCaiChua() };
+  return { status: 'ok', data: docDon({ user: ti.user }, 100).map(boDong), chuaCfg: docCaiChua(), quyen: ti.role === 'khachhang' ? [] : quyenCua(ti.role, ti.user) };
 }
 
 // Quản trị / nhân viên xem tất cả.

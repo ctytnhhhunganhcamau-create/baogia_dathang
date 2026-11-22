@@ -907,6 +907,7 @@
       S.dangTaiDon = false;
       if (!res || res.status !== 'ok') throw new Error((res && res.msg) || 'lỗi');
       if (res.chuaCfg && res.chuaCfg.length) S.chuaCfg = res.chuaCfg;
+      if (res.quyen && S.sess && S.sess.role !== 'khachhang') { S.sess.quyen = res.quyen; LS.set('sess', S.sess); } // quyền nhân viên đổi thì cập nhật ngay, khỏi đăng nhập lại
       S.donToi = res.data || [];
       if (ve && !$('sheet').hidden && $('sheet').getAttribute('data-loai') === 'gio') moGioHang();
     }).catch(function (e) { S.dangTaiDon = false; S.donToiLoi = loiDeHieu(e); if (ve && $('sheet').getAttribute('data-loai') === 'gio') moGioHang(); });
@@ -1546,7 +1547,7 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden && !DEMO) kiemTraBanMoi(); });
   if (DEMO) {
     var sc = document.createElement('script');
-    sc.src = 'demo-data.js?v=20'; sc.onload = batDau;
+    sc.src = 'demo-data.js?v=21'; sc.onload = batDau;
     sc.onerror = function () { document.body.innerHTML = '<p style="padding:20px">Chưa cấu hình APPS_URL trong config.js.</p>'; };
     document.head.appendChild(sc);
   } else batDau();
