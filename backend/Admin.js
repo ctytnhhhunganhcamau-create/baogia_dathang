@@ -31,7 +31,8 @@ function onEdit(e) {
       PropertiesService.getScriptProperties().setProperty('CAP_NHAT_GIA', new Date().toISOString());
     }
     else if (ten === TAB.anh) demXoa('anh');
-    else if (ten === TAB.tonkho || ten === TAB.kho || ten === TAB.noima) demXoa('tonkho');
+    else if (ten === TAB.tonkho || ten === TAB.kho || ten === TAB.noima || TEN_TAB_TON_KHAC.indexOf(ten) >= 0) { demXoa('tonkho'); if (ten !== TAB.kho && ten !== TAB.noima) tuChotMocKhiDan(e); }
+    else if (ten === TAB_SO_KHO || ten === TAB_NHAP) demXoa('sokho');
     else if (ten === TAB.users) xoaDemTaiKhoan();
     else if (ten === TAB.thuongHieu) demXoa('th');
     else if (ten === TAB_CAI_CHUA) CacheService.getScriptCache().remove('cai_chua');

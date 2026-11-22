@@ -48,6 +48,11 @@ function xuLy(p) {
       case 'dsDon':      return ti && (ti.role === 'admin' || ti.role === 'nv') ? dsDon(p, ti) : cam;
       case 'capNhatDon': return ti ? capNhatDon(p, ti) : { status: 'error', msg: 'need_login' };
       case 'chotGia':    return coQuyen(ti, 'chotgia') ? chotGia(p, ti) : cam;
+      // Sổ kho (trừ tồn lúc giao hàng, thẻ kho, kiểm kê, mốc tồn)
+      case 'giaoHang':   return coQuyen(ti, 'giao') ? giaoHang(p, ti) : cam;
+      case 'theKho':     return ti && (ti.role === 'admin' || ti.role === 'nv') ? theKho(p) : cam;
+      case 'chotMoc':    return coQuyen(ti, 'nhapton') ? chotMoc(p, ti) : cam;
+      case 'dieuChinhTon': return coQuyen(ti, 'nhapton') ? dieuChinhTon(p, ti) : cam;
       // Chừa hàng (GĐ2)
       case 'xinGiaHan':  return ti ? xinGiaHan(p, ti) : { status: 'error', msg: 'need_login' };
       // Phân quyền + nhật ký + báo cáo (GĐ3)

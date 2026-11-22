@@ -921,7 +921,7 @@
     if (mo) {
       h += '<div class="dn-ct">' + htmlChuaDon(d) +
         '<div class="dn-hang">' + d.items.map(function (x) {
-          return '<div><span>' + esc(x.ten || x.ma) + '<small>' + esc(x.ma) + (x.dongia ? ' · ' + (x.gia0 && x.gia0 !== x.dongia ? '<s>' + tien(x.gia0) + '</s> ' : '') + '<b class="gia-xin">' + tien(x.dongia) + '</b>' + (x.dvGia ? '/' + esc(x.dvGia) : '') + (d.giaTT === 'cho' && x.giaXin ? ' (giá xin)' : '') : '') + '</small></span><b>' + so(x.sl) + ' ' + esc(x.dv) + (x.qd ? '<small>' + esc(x.qd) + '</small>' : '') + '</b></div>';
+          return '<div><span>' + esc(x.ten || x.ma) + '<small>' + esc(x.ma) + (x.dongia ? ' · ' + (x.gia0 && x.gia0 !== x.dongia ? '<s>' + tien(x.gia0) + '</s> ' : '') + '<b class="gia-xin">' + tien(x.dongia) + '</b>' + (x.dvGia ? '/' + esc(x.dvGia) : '') + (d.giaTT === 'cho' && x.giaXin ? ' (giá xin)' : '') : '') + '</small></span><b>' + so(x.sl) + ' ' + esc(x.dv) + (x.qd ? '<small>' + esc(x.qd) + '</small>' : '') + (x.slGiao > 0 ? '<small class="gia-xin">đã giao ' + so(x.slGiao) + (x.slGiao < x.sl ? ' · còn ' + so(x.sl - x.slGiao) : ' ✓') + '</small>' : '') + '</b></div>';
         }).join('') + '</div>' +
         '<div class="dn-chan"><small>' + esc(d.hinhThuc) + (d.ngayCan ? ' · cần ' + esc(d.ngayCan) : '') + '</small><span>' +
         (d.tt === 'moi' ? '<button type="button" class="btn btn-vien btn-nho" data-huy-don="' + esc(d.ma) + '">Hủy đơn</button>' : '') +
@@ -1547,7 +1547,7 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden && !DEMO) kiemTraBanMoi(); });
   if (DEMO) {
     var sc = document.createElement('script');
-    sc.src = 'demo-data.js?v=21'; sc.onload = batDau;
+    sc.src = 'demo-data.js?v=22'; sc.onload = batDau;
     sc.onerror = function () { document.body.innerHTML = '<p style="padding:20px">Chưa cấu hình APPS_URL trong config.js.</p>'; };
     document.head.appendChild(sc);
   } else batDau();

@@ -22,6 +22,13 @@ App bảng giá + tồn kho + đặt hàng cho **Công ty TNHH Hùng Anh Cà Mau
 - Giá vốn (cột **Giá vốn** trong tab Giá) chỉ quản trị thấy: hiện biên lợi nhuận khi chốt và cảnh báo khi bán dưới vốn. Máy chủ không bao giờ gửi giá vốn cho nhân viên / đại lý.
 - Máy chủ tự tính lại tiền theo giá xin / giá chốt, không tin con số từ điện thoại. Mọi bước ghi vào Nhật ký.
 
+## Sổ kho: trừ tồn lúc giao hàng (kiểu ERP)
+- **KiotViet vẫn là sổ gốc.** Tab `Tồn kho` (dán từ KiotViet) là **mốc tồn**; từ mốc đó app tự cộng trừ theo `Sổ kho` cho tới lần dán sau. Dán tồn mới → mốc đặt lại (tự động khi copy-paste, hoặc bấm **Chốt mốc tồn** ở trang Tồn kho) nên không bị trừ 2 lần.
+- `Tồn thực` = tồn mốc − hàng đã giao + hàng trả về + phiếu nhập (sau mốc) ± kiểm kê. `Đang giữ` = phần chưa giao của đơn mới / chừa hàng / đã xác nhận / đang giao. `Được bán` = Tồn thực − Đang giữ.
+- Lên đơn, chừa hàng, duyệt: chỉ **giữ** hàng. Tồn thực chỉ trừ khi bấm **Ghi nhận giao hàng** (nhập số thực giao từng dòng; giao nhiều đợt được; hàng trả về thì nhập số thực giao nhỏ hơn). Đơn chốt `Đã giao` tính tiền theo số thực giao.
+- Đại lý không đặt được vượt `Được bán`; nhân viên / quản trị vẫn đặt được, đơn gắn cờ **Thiếu hàng**.
+- Trang Tồn kho có **Sổ kho & thẻ kho** (xem biến động từng mã) và **kiểm kê / điều chỉnh**.
+
 ## Tab trong Google Sheet (không đổi tên tab)
 `Giá`, `Tồn kho`, `Kho`, `Nối mã`, `Ảnh`, `Users`. Cột đọc **theo tên tiêu đề** (xem `backend/Config.js`).
 Tồn kho từ KiotViet chỉ có *Tên hàng*, nên **Tên hàng = mã tồn kho**, tab `Nối mã` đổi sang mã `HAxxxx` của tab `Giá`.

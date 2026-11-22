@@ -291,3 +291,14 @@ details.qt-ton-hd summary{padding:14px 16px;cursor:pointer}
 .qt-gia-hd{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .qt-gia-hd textarea,.qt-gia-gc{width:100%;border:1px solid #D8C08A;border-radius:8px;padding:7px 9px;font-size:13px;margin-top:8px}
 .tt-gia-cho{background:#FFF1DC;color:#9A5B00}.tt-gia-chot{background:#E7F5EC;color:#1F7A3A}.tt-gia-tuchoi{background:#F1F3F4;color:#6B7280}
+
+/* Giao hàng từng phần + sổ kho */
+.qt-giao-box{background:#EEF7F0;border:1px solid #7CC48E;border-radius:12px;padding:12px;margin:10px 0}
+.qt-giao-box h4{margin:0 0 6px;font-size:15px;color:#1F7A3A}
+.qt-giao-box input[data-gh]{width:90px;text-align:right;border:1px solid #9CCFA9;border-radius:8px;padding:6px 7px;font-size:13px;background:#fff}
+.qt-giao-kt{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px;font-size:13px}
+.qt-sokho .qt-moc{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0}
+.qt-the-nho{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:10px 0}
+.qt-the-nho .qt-so b{font-size:18px}
+.qt-sokho .am{color:#D81E24;font-weight:700}.qt-sokho .duong{color:#1F7A3A;font-weight:700}
+.qt-sokho .qt-loc input{flex:1;min-width:180px}

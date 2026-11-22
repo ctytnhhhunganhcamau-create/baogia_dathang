@@ -97,6 +97,7 @@
   function conLai(iso) { var h = new Date(iso).getTime() - Date.now(); if (isNaN(h)) return ''; if (h < 0) return 'quá hạn ' + Math.ceil(-h / 86400000) + ' ngày'; var n = Math.floor(h / 86400000); return n < 1 ? 'hết hạn hôm nay' : 'còn ' + n + ' ngày'; }
   function tuoiTon(iso) { if (!iso) return null; var t = new Date(iso + 'T00:00:00'); if (isNaN(t)) return null; var n = Math.max(0, Math.floor((Date.now() - t.getTime()) / 86400000));
     return { n: n, muc: n <= 30 ? 'moi' : n <= 90 ? 'tb' : n <= 180 ? 'lau' : 'rlau', ten: n <= 30 ? 'Hàng mới' : n <= 90 ? 'Bình thường' : n <= 180 ? 'Tồn lâu' : 'Tồn rất lâu – nên sale', ngay: ('0' + t.getDate()).slice(-2) + '/' + ('0' + (t.getMonth() + 1)).slice(-2) + '/' + t.getFullYear() }; }
+  function nhanThieu(d) { return d.thieu && ['moi', 'giu', 'xacnhan', 'danggiao'].indexOf(d.tt) >= 0 ? '<br><small class="qt-chua het">⚠ thiếu hàng</small>' : ''; }
   function nhanGia(d) { return d.giaTT ? '<br><span class="tt tt-gia-' + d.giaTT + '">💲 ' + TEN_GIA[d.giaTT] + '</span>' : ''; }
   function nhanChua(d) {
     if (d.loai !== 'chua') return '';
@@ -106,7 +107,7 @@
   }
   function taiTon() {
     if (S.ton) return Promise.resolve(S.ton);
-    return api('getTonKho', {}).then(function (r) { if (r && r.status === 'ok') S.ton = r.data; return S.ton; }).catch(function () { return null; });
+    return api('getTonKho', {}).then(function (r) { if (r && r.status === 'ok') { S.ton = r.data; S.tonCoLech = !!(r.moc && r.moc.lech); } return S.ton; }).catch(function () { return null; });
   }
   // "Được bán" đã trừ mọi đơn đang giữ (kể cả đơn này). Đỏ = các đơn đang giữ vượt quá tồn thực.
   function oTon(x) {
@@ -132,6 +133,7 @@
     if (S.trang === 'taikhoan' && !S.tk.ds) taiTaiKhoan();
     if (S.trang === 'baogia' && S.bg.dang && !S.gia.ds) taiGia();
     if (S.trang === 'ton' && !S.tonTT && co('nhapton')) taiTonTT();
+    if (S.trang === 'ton' && !S.sk.da && !S.sk.dangTai) taiSoKho();
   }
   function trongThang(d) { var x = new Date(d.ngay), n = new Date(); return x.getMonth() === n.getMonth() && x.getFullYear() === n.getFullYear(); }
   function veTong() {
@@ -156,7 +158,7 @@
   function locDon() {
     var q = S.q.trim().toLowerCase();
     return S.don.filter(function (d) {
-      if (S.loc === 'xingia') { if (d.giaTT !== 'cho') return false; } else if (S.loc && d.tt !== S.loc) return false;
+      if (S.loc === 'xingia') { if (d.giaTT !== 'cho') return false; } else if (S.loc === 'thieu') { if (!(d.thieu && ['moi', 'giu', 'xacnhan', 'danggiao'].indexOf(d.tt) >= 0)) return false; } else if (S.loc && d.tt !== S.loc) return false;
       if (S.nguoiChua && !(d.loai === 'chua' && (d.nguoiTao || d.user) === S.nguoiChua && CHUA_DANG[d.tt])) return false;
       if (!q) return true;
       return [d.ma, d.ten, d.sdt, d.user, d.diaChi, d.chuaCho, d.nguoiTao].concat(d.items.map(function (x) { return x.ma; })).join(' ').toLowerCase().indexOf(q) >= 0;
@@ -177,6 +179,7 @@
       '<div class="qt-loc"><button type="button" class="chip' + (S.loc ? '' : ' on') + '" data-qt-loc="">Tất cả</button>' +
       THU_TU.map(function (t) { return '<button type="button" class="chip' + (S.loc === t ? ' on' : '') + '" data-qt-loc="' + t + '">' + TEN_TT[t] + ' <small>' + (S.dem[t] || 0) + '</small></button>'; }).join('') +
       '<button type="button" class="chip' + (S.loc === 'xingia' ? ' on' : '') + '" data-qt-loc="xingia">💲 Chờ chốt giá <small>' + (S.dem.xinGia || 0) + '</small></button>' +
+      '<button type="button" class="chip' + (S.loc === 'thieu' ? ' on' : '') + '" data-qt-loc="thieu">⚠ Thiếu hàng <small>' + S.don.filter(function (d) { return d.thieu && ['moi', 'giu', 'xacnhan', 'danggiao'].indexOf(d.tt) >= 0; }).length + '</small></button>' +
       '<input id="qt-q" type="search" placeholder="Tìm mã đơn, đại lý, SĐT, mã hàng, người chừa…"></div>' + chipNguoiChua() +
       '<div class="qt-khung">' + bangDon(ds, 'Không có đơn phù hợp') + '</div>';
   }
@@ -186,17 +189,18 @@
       ds.map(function (d) {
         return '<tr class="dong" data-don="' + esc(d.ma) + '"><td class="ma">' + esc(d.ma) + '</td><td>' + gio(d.ngay) + '</td><td><b>' + esc(d.ten) + '</b><br><small>' + esc(d.sdt) + ' · ' + esc(d.nguoiTao && d.nguoiTao !== d.user ? d.nguoiTao + ' (' + d.user + ')' : d.user) + '</small></td>' +
           '<td class="an-dt">' + esc(d.hinhThuc) + (d.ngayCan ? '<br><small>cần ' + esc(d.ngayCan) + '</small>' : '') + '</td><td class="an-dt">' + d.items.length + ' mã</td>' +
-          '<td class="so">' + tien(d.tong) + (d.giaTT === 'cho' && d.tongGoc ? '<br><small class="mo">gốc ' + tien(d.tongGoc) + '</small>' : '') + '</td><td>' + nhanTT(d.tt) + nhanGia(d) + nhanChua(d) + '</td></tr>';
+          '<td class="so">' + tien(d.tong) + (d.giaTT === 'cho' && d.tongGoc ? '<br><small class="mo">gốc ' + tien(d.tongGoc) + '</small>' : '') + '</td><td>' + nhanTT(d.tt) + nhanGia(d) + nhanThieu(d) + nhanChua(d) + '</td></tr>';
       }).join('') + '</tbody></table>';
   }
 
   // ---------- Chi tiết đơn ----------
   var NUT = { moi: [['xacnhan', 'Xác nhận đơn', 'btn-chinh'], ['tuchoi', 'Từ chối', 'btn-vien']],
     giu: [['xacnhan', 'Chuyển thành đơn giao', 'btn-chinh'], ['huy', 'Nhả hàng', 'btn-vien']],
-    xacnhan: [['danggiao', 'Đang giao', 'btn-chinh'], ['dagiao', 'Đã giao', 'btn-xanh'], ['huy', 'Hủy đơn', 'btn-vien']],
-    danggiao: [['dagiao', 'Đã giao', 'btn-xanh'], ['huy', 'Hủy đơn', 'btn-vien']], dagiao: [], huy: [['moi', 'Mở lại', 'btn-vien']], tuchoi: [['moi', 'Mở lại', 'btn-vien']] };
+    xacnhan: [['danggiao', 'Đang giao', 'btn-chinh'], ['giaohang', 'Ghi nhận giao hàng', 'btn-xanh'], ['huy', 'Hủy đơn', 'btn-vien']],
+    danggiao: [['giaohang', 'Ghi nhận giao hàng', 'btn-xanh'], ['huy', 'Hủy đơn', 'btn-vien']], dagiao: [['giaohang', 'Sửa số thực giao (hàng trả về)', 'btn-vien']], huy: [['moi', 'Mở lại', 'btn-vien']], tuchoi: [['moi', 'Mở lại', 'btn-vien']] };
   // Cùng quy tắc với máy chủ: việc với đơn chừa hàng cần quyền "chua", giao hàng cần "don".
   function quyenTT(d, tt) {
+    if (tt === 'giaohang') return 'giao';
     if (tt === 'giu' || d.tt === 'giu' || (d.loai === 'chua' && ['moi', 'huy', 'tuchoi'].indexOf(d.tt) >= 0)) return 'chua';
     if ((tt === 'danggiao' || tt === 'dagiao') && (d.tt === 'xacnhan' || d.tt === 'danggiao')) return 'giao';
     return 'don';
@@ -219,10 +223,11 @@
       (d.loai === 'chua' ? '<span>Chừa hàng</span><div><b>' + d.soNgay + ' ngày</b>' + (d.tt === 'giu' && d.han ? ' · giữ tới <b>' + ngayNgan(d.han) + '</b> <span class="qt-chua' + (hetHan(d) ? ' het' : '') + '">(' + conLai(d.han) + ')</span>' : d.tt === 'moi' ? ' · chờ duyệt (hạn tính từ ngày duyệt)' : '') + '</div>' : '') +
       (d.nguoiGiao ? '<span>Người giao</span><div><b>' + esc(d.nguoiGiao) + '</b></div>' : '') + (d.ngayGiao ? '<span>Đã giao lúc</span><div>' + gio(d.ngayGiao) + '</div>' : '') +
       (d.xuLy ? '<span>Người xử lý</span><div>' + esc(d.xuLy) + (d.capNhat ? ' · ' + gio(d.capNhat) : '') + '</div>' : '') + '</div>' +
-      htmlChuaQT(d) + htmlGiaQT(d) +
-      '<div class="sec">Mặt hàng</div><table class="qt-ct"><thead><tr><th>Mã / tên</th><th class="so">SL</th><th class="so an-dt">Được bán</th><th class="so">Đơn giá</th><th class="so">Thành tiền</th></tr></thead><tbody>' +
-      d.items.map(function (x) { return '<tr><td><b>' + esc(x.ma) + '</b><br><small>' + esc(x.ten) + '</small></td><td class="so">' + so(x.sl) + ' ' + esc(x.dv) + (x.qd ? '<br><small>' + esc(x.qd) + '</small>' : '') + '</td><td class="so an-dt">' + oTon(x) + '</td><td class="so">' + tien(x.dongia) + (x.gia0 && x.gia0 !== x.dongia ? '<br><small class="mo"><s>' + tien(x.gia0) + '</s></small>' : '') + (laAdmin() && x.von > 0 ? '<br><small class="mo">vốn ' + tien(x.von) + ' · biên <b class="' + (x.dongia < x.von ? 'am' : 'duong') + '">' + pcBien(x.dongia, x.von) + '%</b></small>' : '') + '</td><td class="so">' + tien(x.tien) + '</td></tr>'; }).join('') +
-      '</tbody><tfoot><tr><td colspan="4" class="so">Tổng</td><td class="so">' + tien(d.tong) + '</td></tr></tfoot></table>' +
+      htmlChuaQT(d) + htmlGiaQT(d) + htmlGiaoQT(d) +
+      (d.thieu && ['moi', 'giu', 'xacnhan', 'danggiao'].indexOf(d.tt) >= 0 ? '<div class="qt-xin het">⚠ THIẾU HÀNG so với "Được bán": ' + esc(d.thieu) + '</div>' : '') +
+      '<div class="sec">Mặt hàng</div><table class="qt-ct"><thead><tr><th>Mã / tên</th><th class="so">SL</th>' + (coGiao(d) ? '<th class="so">Đã giao</th>' : '') + '<th class="so an-dt">Được bán</th><th class="so">Đơn giá</th><th class="so">Thành tiền</th></tr></thead><tbody>' +
+      d.items.map(function (x) { return '<tr><td><b>' + esc(x.ma) + '</b><br><small>' + esc(x.ten) + '</small></td><td class="so">' + so(x.sl) + ' ' + esc(x.dv) + (x.qd ? '<br><small>' + esc(x.qd) + '</small>' : '') + '</td>' + (coGiao(d) ? '<td class="so">' + (x.slGiao > 0 ? '<b>' + so(x.slGiao) + '</b>' : '—') + (x.slGiao > 0 && x.slGiao < x.sl ? '<br><small class="mo">còn ' + so(x.sl - x.slGiao) + '</small>' : '') + '</td>' : '') + '<td class="so an-dt">' + oTon(x) + '</td><td class="so">' + tien(x.dongia) + (x.gia0 && x.gia0 !== x.dongia ? '<br><small class="mo"><s>' + tien(x.gia0) + '</s></small>' : '') + (laAdmin() && x.von > 0 ? '<br><small class="mo">vốn ' + tien(x.von) + ' · biên <b class="' + (x.dongia < x.von ? 'am' : 'duong') + '">' + pcBien(x.dongia, x.von) + '%</b></small>' : '') + '</td><td class="so">' + tien(x.tien) + '</td></tr>'; }).join('') +
+      '</tbody><tfoot><tr><td colspan="' + (coGiao(d) ? 5 : 4) + '" class="so">' + (d.tt === 'dagiao' ? 'Tổng thực giao' : 'Tổng') + '</td><td class="so">' + tien(d.tong) + '</td></tr></tfoot></table>' +
       '<div class="sec">Ghi chú nội bộ</div><textarea class="qt-nb" id="qt-nb"' + (co('ghichu') ? '' : ' disabled') + ' placeholder="Chỉ nội bộ thấy (đại lý không thấy)">' + esc(d.ghiChuNB) + '</textarea>' +
       (!nut.length && !luu && !laAdmin() ? '<p class="mo khong-in" style="margin-top:8px">Tài khoản của bạn chỉ xem đơn này. Cần duyệt / sửa: nhờ quản trị bật quyền trong "Nhân viên & quyền".</p>' : '') +
       '<div class="sec khong-in">Lịch sử xử lý</div><div class="qt-ls khong-in" id="qt-ls">' + htmlLichSu(ma) + '</div>' +
@@ -254,6 +259,70 @@
       '<label>Đã nhận cọc<input id="qt-dacoc" inputmode="numeric" value="' + (d.daCoc || 0) + '"' + (ccoc ? '' : ' disabled') + '></label>' +
       '<div class="qt-coc-tt">' + (d.coc ? (d.daCoc >= d.coc ? '✅ Đủ cọc' : '⚠️ Còn thiếu ' + tien(d.coc - (d.daCoc || 0))) : 'Không yêu cầu cọc') + '</div></div>';
     if (cc && d.tt === 'giu') h += '<div class="qt-gh"><span>Gia hạn thêm:</span>' + S.chuaCfg.map(function (c) { return '<button type="button" class="chip" data-qt-gh="' + c.ngay + '">+' + c.ngay + ' ngày</button>'; }).join('') + '</div>';
+    return h + '</div>';
+  }
+  function coGiao(d) { return ['xacnhan', 'danggiao', 'dagiao'].indexOf(d.tt) >= 0 || d.items.some(function (x) { return x.slGiao > 0; }); }
+  // Ghi nhận giao hàng: nhập SỐ THỰC GIAO (cộng dồn) từng dòng – tồn thực chỉ trừ lúc này; thiếu so với đặt = hàng trả về / giao đợt sau.
+  function htmlGiaoQT(d) {
+    if (S.giaoMo !== d.ma || ['xacnhan', 'danggiao', 'dagiao'].indexOf(d.tt) < 0) return '';
+    var dong = d.tt === 'dagiao';
+    var h = '<div class="qt-giao-box"><h4>🚚 ' + (dong ? 'Sửa số thực giao (hàng trả về / điều chỉnh)' : 'Ghi nhận giao hàng – trừ kho theo số thực giao') + '</h4>' +
+      '<p class="mo">Nhập <b>số thực giao cộng dồn</b> của từng mặt hàng (đã trừ hàng khách trả lại). Tồn kho thực chỉ bị trừ ở bước này.</p>' +
+      '<table class="qt-gia-tb"><thead><tr><th>Mặt hàng</th><th>Đặt</th><th>Đã giao trước</th><th>Thực giao</th></tr></thead><tbody>' +
+      d.items.map(function (x) {
+        return '<tr><td><b>' + esc(x.ma) + '</b><small>' + esc(x.ten) + '</small></td><td>' + so(x.sl) + ' ' + esc(x.dv) + '</td><td>' + so(x.slGiao || 0) + '</td>' +
+          '<td><input data-gh="' + esc(x.ma) + '" inputmode="decimal" value="' + (dong || x.slGiao > 0 ? (x.slGiao || 0) : x.sl) + '"> <small>' + esc(x.dv) + '</small></td></tr>';
+      }).join('') + '</tbody></table>';
+    if (!dong) h += '<div class="qt-giao-kt"><label><input type="radio" name="gh-kt" value="tiep"> Còn giao đợt sau (phần chưa giao vẫn được giữ)</label>' +
+      '<label><input type="radio" name="gh-kt" value="xong" checked> Giao xong – nhả phần chưa giao</label></div>' +
+      '<input class="qt-gia-gc" id="qt-gh-ng" maxlength="100" placeholder="Người giao / xe (không bắt buộc)" value="' + esc(d.nguoiGiao || '') + '">';
+    return h + '<div class="qt-gia-hd"><button type="button" class="btn btn-xanh" data-qt-act="giao-luu">Lưu & trừ kho</button><button type="button" class="btn btn-vien" data-qt-act="giao-dong">Đóng</button></div></div>';
+  }
+  function luuGiaoHang(nut) {
+    var d = don(S.moMa); if (!d) return;
+    var m = {}; d.items.forEach(function (x) { var o = document.querySelector('[data-gh="' + x.ma + '"]'); if (o) m[x.ma] = String(o.value).replace(',', '.'); });
+    var kt = document.querySelector('input[name="gh-kt"]:checked'), ng = $('qt-gh-ng');
+    var giu = d.items.filter(function (x) { return Number(m[x.ma]) < x.sl - 1e-9; }).length;
+    if (d.tt !== 'dagiao' && giu && kt && kt.value === 'xong' && !confirm(giu + ' mặt hàng giao ít hơn đặt – phần chưa giao sẽ được NHẢ (không giữ nữa). Tiếp tục?')) return;
+    nut.disabled = true;
+    api('giaoHang', { ma: d.ma, items: m, ketThuc: d.tt !== 'dagiao' && kt && kt.value === 'xong' ? 1 : 0, nguoiGiao: ng ? ng.value.trim() : '' }, true).then(function (r) {
+      if (!r || r.status !== 'ok') throw new Error((r && r.msg) || 'lỗi');
+      toast(r.msg); S.giaoMo = ''; S.ton = null; S.sk.da = 0; delete S.ls[d.ma]; S.bc.kq = null; S.nk.ds = null; return taiDon();
+    }).catch(function (e) { nut.disabled = false; toast('Không lưu được: ' + e.message); });
+  }
+
+  // ---------- Sổ kho & thẻ kho (trang Tồn kho) ----------
+  S.sk = { da: 0, dangTai: 0, ma: '', moc: null, tt: null, ds: [], giu: [], loi: '' };
+  function taiSoKho(ma) {
+    if (S.sk.dangTai) return; S.sk.dangTai = 1; if (ma !== undefined) S.sk.ma = ma;
+    api('theKho', { ma: S.sk.ma, gioiHan: 80 }).then(function (r) {
+      S.sk.dangTai = 0; if (!r || r.status !== 'ok') throw new Error((r && r.msg) || 'lỗi');
+      S.sk.da = 1; S.sk.loi = ''; S.sk.moc = r.moc; S.sk.tt = r.tt || null; S.sk.ds = r.ds || []; S.sk.giu = r.giu || []; if (S.trang === 'ton') ve();
+    }).catch(function (e) { S.sk.dangTai = 0; S.sk.da = 1; S.sk.loi = e.message; if (S.trang === 'ton') ve(); });
+  }
+  function dongSK(r) {
+    var am = r.sl < 0;
+    return '<tr' + (r.sauMoc === false ? ' class="mo"' : '') + '><td>' + gio(r.luc) + '</td><td>' + esc(r.loai) + (r.sauMoc === false ? '<br><small>trước mốc – không tính</small>' : '') + '</td><td>' + esc(r.ct) + '</td><td><b>' + esc(r.ma) + '</b><br><small>' + esc(r.ten) + '</small></td>' +
+      '<td class="so"><b class="' + (am ? 'am' : 'duong') + '">' + (am ? '' : '+') + so(r.sl) + '</b> <small>' + esc(r.dv) + '</small></td><td>' + esc(r.kho) + '</td><td>' + esc(r.nguoi) + (r.gc ? '<br><small>' + esc(r.gc) + '</small>' : '') + '</td></tr>';
+  }
+  function veSoKho() {
+    var k = S.sk, m = k.moc, h = '<div class="qt-khung qt-sokho"><h2>📒 Sổ kho & thẻ kho <small>trừ tồn lúc giao hàng · cộng khi nhập · kiểm kê</small></h2>';
+    if (!k.da) return h + '<div class="qt-trong">Đang tải sổ kho…</div></div>';
+    if (k.loi) return h + '<div class="qt-trong">Không tải được sổ kho: ' + esc(k.loi) + '</div></div>';
+    h += '<div class="qt-moc"><span>Mốc tồn: <b>' + (m ? gio(m.luc) : '—') + '</b>' + (m && m.nguoi ? ' · ' + esc(m.nguoi) : '') + '</span>' +
+      (co('nhapton') ? '<button type="button" class="btn btn-vien btn-nho" data-qt-act="sk-moc">Chốt mốc tồn (vừa dán KiotViet mới)</button>' : '') + '</div>' +
+      '<p class="mo">Từ mốc này app tự <b>trừ hàng đã giao</b> và cộng phiếu nhập cho tới lần dán tồn KiotViet sau. Dán tồn mới → bấm "Chốt mốc tồn" (dán copy-paste thì app tự chốt) để không bị trừ 2 lần.</p>';
+    if (S.tonCoLech) h += '<div class="qt-xin het">⚠ Số tồn trong Sheet đã đổi từ lúc chốt mốc. Nếu đây là bản KiotViet mới, bấm <b>Chốt mốc tồn</b>.</div>';
+    h += '<div class="qt-loc"><input id="qt-sk-ma" placeholder="Mã hàng để xem thẻ kho (vd HA0093)" value="' + esc(k.ma) + '"><button type="button" class="btn btn-chinh btn-nho" data-qt-act="sk-xem">Xem thẻ kho</button>' + (k.ma ? '<button type="button" class="btn btn-vien btn-nho" data-qt-act="sk-xoa">Xem sổ kho chung</button>' : '') + '</div>';
+    if (k.ma) {
+      var t = k.tt;
+      if (!t) h += '<div class="qt-trong">Mã ' + esc(k.ma) + ' chưa có trong tồn / sổ kho.</div>';
+      else h += '<div class="qt-the qt-the-nho">' + [['Tồn mốc', t.tonMoc, ''], ['Đã giao', -((t.soKho || {}).xuat || 0), 'am'], ['Hoàn kho', (t.soKho || {}).hoan || 0, 'duong'], ['Nhập sau mốc', (t.soKho || {}).nhap || 0, 'duong'], ['Kiểm kê', (t.soKho || {}).dc || 0, ''],
+        ['Tồn thực', t.tonThat, 'c'], ['Đang giữ', t.giu, 'cam'], ['Được bán', t.duocBan, 'xanh']].map(function (a) { return '<div class="qt-so ' + a[2] + '"><small>' + a[0] + '</small><b>' + so(a[1]) + '</b></div>'; }).join('') + '</div><p class="mo">Đơn vị: ' + esc(t.dvt || '') + '. Được bán = Tồn thực − Đang giữ.</p>';
+      if (t && co('nhapton')) h += '<div class="qt-gia-hd"><input id="qt-kk-sl" inputmode="decimal" placeholder="Số đếm thực tế" style="width:140px"><input id="qt-kk-ly" placeholder="Lý do (kiểm kê, hỏng, thất thoát…)" style="flex:1;min-width:160px"><button type="button" class="btn btn-cam" data-qt-act="sk-kk">Điều chỉnh tồn theo số đếm</button></div>';
+      if (k.giu && k.giu.length) h += '<p class="mo" style="margin-top:8px"><b>Đơn đang giữ:</b> ' + k.giu.map(function (g) { return esc(g.don) + ' (' + so(g.sl) + ' ' + esc(g.dv || '') + ')'; }).join(' · ') + '</p>';
+    }
+    h += (k.ds.length ? '<table class="qt-bang"><thead><tr><th>Lúc</th><th>Loại</th><th>Chứng từ</th><th>Mã hàng</th><th class="so">Số lượng</th><th>Kho</th><th>Người / ghi chú</th></tr></thead><tbody>' + k.ds.map(dongSK).join('') + '</tbody></table>' : '<div class="qt-trong">' + (k.ma ? 'Chưa có biến động nào cho mã này.' : 'Chưa có biến động kho nào. Biến động đầu tiên xuất hiện khi bạn bấm "Ghi nhận giao hàng" ở một đơn.') + '</div>');
     return h + '</div>';
   }
   function pcBien(gia, von) { return gia > 0 ? so(Math.round((gia - von) / gia * 1000) / 10) : '0'; }
@@ -328,7 +397,7 @@
     var hoi = tt === 'tuchoi' ? 'Từ chối đơn ' : tt === 'huy' ? (d.tt === 'giu' ? 'Nhả hàng (hủy chừa) đơn ' : 'Hủy đơn ') : '';
     if (hoi && !confirm(hoi + d.ma + '?' + (d.daCoc ? '\nLưu ý: đại lý đã cọc ' + tien(d.daCoc) + ' – ghi rõ cách xử lý cọc vào ghi chú nội bộ.' : ''))) return;
     if (tt === 'danggiao') { var ng = prompt('Người giao / xe (không bắt buộc):', d.nguoiGiao || ''); if (ng === null) return; guiCapNhat({ tt: tt, nguoiGiao: ng }); return; }
-    if (tt === 'dagiao' && !confirm('Xác nhận đơn ' + d.ma + ' ĐÃ GIAO xong?')) return;
+    if (tt === 'giaohang') { S.giaoMo = d.ma; moDon(d.ma); return; }
     guiCapNhat({ tt: tt });
   }
 
@@ -1099,9 +1168,9 @@
     }).catch(function (e) { toast('Không tạo được file: ' + e.message); }).then(function () { nut.disabled = false; nut.textContent = cu; });
   }
   function veTon() {
-    if (!co('nhapton')) return '<div class="qt-h1">Tồn kho</div>' + khungSoTon() + veTuoiTon();
+    if (!co('nhapton')) return '<div class="qt-h1">Tồn kho</div>' + veSoKho() + khungSoTon() + veTuoiTon();
     var t = S.tonTT;
-    return '<div class="qt-h1">Tồn kho <small>số lượng theo Sheet Tồn kho · ngày nhập theo phiếu nhập</small></div>' + vePhieuNhapDs() + khungSoTon() + veTuoiTon() +
+    return '<div class="qt-h1">Tồn kho <small>số lượng theo Sheet Tồn kho · ngày nhập theo phiếu nhập</small></div>' + veSoKho() + vePhieuNhapDs() + khungSoTon() + veTuoiTon() +
       '<details class="qt-khung qt-ton-hd"' + (S.tonHdMo ? ' open' : '') + '><summary><b>Số lượng tồn: cập nhật từ phần mềm kho (Google Sheet)</b></summary>' +
       (!t ? '<div class="qt-trong">Đang tải…</div>' : '<ol>' +
         '<li>Bấm <b>Mở Sheet Tồn kho</b> (đăng nhập đúng Gmail đã được quản trị ghi trong "Nhân viên & quyền").</li>' +
@@ -1362,6 +1431,20 @@
     else if (a === 'pn-het') { S.pn.het = !S.pn.het; ve(); }
     else if (a === 'in') window.print();
     else if (a === 'luu-nb') guiCapNhat({}, 'Đã lưu');
+    else if (a === 'giao-luu') luuGiaoHang(el);
+    else if (a === 'giao-dong') { S.giaoMo = ''; moDon(S.moMa); }
+    else if (a === 'sk-xem') { var mk = ($('qt-sk-ma') ? $('qt-sk-ma').value.trim() : ''); S.sk.da = 0; S.sk.ma = mk; taiSoKho(mk); ve(); }
+    else if (a === 'sk-xoa') { S.sk.da = 0; S.sk.ma = ''; taiSoKho(''); ve(); }
+    else if (a === 'sk-moc') {
+      var gc = prompt('Ghi chú (không bắt buộc) – vd "dán KiotViet 17h":', ''); if (gc === null) return;
+      if (!confirm('Chốt mốc tồn? Từ giờ số tồn trong Sheet là gốc, các dòng sổ kho trước đó không tính nữa.')) return;
+      el.disabled = true; api('chotMoc', { gc: gc }, true).then(function (r) { el.disabled = false; if (!r || r.status !== 'ok') throw new Error((r && r.msg) || 'lỗi'); toast(r.msg); S.ton = null; S.sk.da = 0; S.tonCoLech = false; ve(); }).catch(function (e) { el.disabled = false; toast('Không chốt được: ' + e.message); });
+    }
+    else if (a === 'sk-kk') {
+      var slk = $('qt-kk-sl') ? $('qt-kk-sl').value.trim() : ''; if (!S.sk.ma || slk === '') { toast('Nhập số đếm thực tế'); return; }
+      if (!confirm('Điều chỉnh tồn của ' + S.sk.ma + ' theo số đếm ' + slk + '?')) return;
+      el.disabled = true; api('dieuChinhTon', { ma: S.sk.ma, thucDem: slk, lyDo: $('qt-kk-ly') ? $('qt-kk-ly').value.trim() : '' }, true).then(function (r) { el.disabled = false; if (!r || r.status !== 'ok') throw new Error((r && r.msg) || 'lỗi'); toast(r.msg); S.ton = null; S.sk.da = 0; taiSoKho(S.sk.ma); }).catch(function (e) { el.disabled = false; toast('Không điều chỉnh được: ' + e.message); });
+    }
     else if (a === 'chot-gia') chotGiaQT(el.getAttribute('data-q'), el.getAttribute('data-xn') === '1', el);
     else if (a === 'bo-xin') guiCapNhat({ boXin: 1 });
     else if (a === 'lam-moi') { S.ton = null; S.ls = {}; el.disabled = true; taiDon().then(function () { toast('Đã làm mới'); }); }
@@ -1465,5 +1548,5 @@
     veMenu(); ve(); taiDon();
     clearInterval(batDau._t); batDau._t = setInterval(function () { if (!document.hidden) taiDon(true); }, 60000); // tự làm mới mỗi phút
   }
-  if (DEMO) { var sc = document.createElement('script'); sc.src = 'demo-data.js?v=21'; sc.onload = batDau; document.head.appendChild(sc); } else batDau();
+  if (DEMO) { var sc = document.createElement('script'); sc.src = 'demo-data.js?v=22'; sc.onload = batDau; document.head.appendChild(sc); } else batDau();
 })();

@@ -59,6 +59,26 @@
   var gmailNV = {};
   var TEN_GIA_D = { cho: 'Chờ chốt giá', chot: 'Đã chốt giá', tuchoi: 'Từ chối giá' };
   function anVon(d, admin) { var o = sao(d); if (!admin) o.items.forEach(function (x) { delete x.von; }); return o; }
+  // ---- Sổ kho (giả): xuất khi GIAO HÀNG, hoàn khi hàng trả về, kiểm kê; mốc tồn = lúc mở trang
+  var soKhoDemo = [], mocDemo = { luc: new Date(Date.now() - 3600000).toISOString(), nguoi: '', gc: '' };
+  function conLaiX(x) { return Math.max(0, (Number(x.sl) || 0) - (Number(x.slGiao) || 0)); }
+  function tonDayDu() {
+    var t = sao(ton), giu = {}, giuDs = {}, t0 = new Date(mocDemo.luc).getTime();
+    soKhoDemo.forEach(function (r) {
+      if (new Date(r.luc).getTime() < t0) return;
+      var d = t[r.ma]; if (!d) d = t[r.ma] = { tong: 0, dvt: r.dv, tier: { nhanh: 0, mai: 0, cho: 0 }, kho: [], ten: r.ten };
+      if (d.tonMoc === undefined) { d.tonMoc = d.tong; d.soKho = { xuat: 0, hoan: 0, nhap: 0, dc: 0 }; }
+      d.tong = Math.max(0, Math.round((d.tong + r.sl) * 100) / 100); d.tier.nhanh = Math.max(0, Math.round((d.tier.nhanh + r.sl) * 100) / 100);
+      if (r.loai === 'Xuất kho giao hàng') d.soKho.xuat = Math.round((d.soKho.xuat - r.sl) * 100) / 100; else if (r.loai === 'Hoàn kho (hàng trả về)') d.soKho.hoan += r.sl; else d.soKho.dc += r.sl;
+    });
+    donDemo.forEach(function (d) { if (['moi', 'giu', 'xacnhan', 'danggiao'].indexOf(d.tt) >= 0) d.items.forEach(function (x) { var c = conLaiX(x); if (c <= 0) return; giu[x.ma] = (giu[x.ma] || 0) + c; (giuDs[x.ma] = giuDs[x.ma] || []).push({ don: d.ma, ten: d.nguoiTao || d.user, ch: d.ten, loai: d.loai, tt: d.tt, sl: c, dv: x.dv }); }); });
+    Object.keys(giu).forEach(function (m) {
+      var d = t[m]; if (!d) return;
+      d.tonGoc = d.tong; d.giu = giu[m]; d.giuDs = giuDs[m]; d.tong = Math.max(0, d.tong - giu[m]);
+      var con = giu[m]; ['nhanh', 'mai', 'cho'].forEach(function (k) { var b = Math.min(d.tier[k], con); d.tier[k] -= b; con -= b; });
+    });
+    return t;
+  }
   var TT_TEN = { moi: 'Mới – chờ duyệt', giu: 'Đang chừa hàng', xacnhan: 'Đã xác nhận', danggiao: 'Đang giao', dagiao: 'Đã giao', huy: 'Đã hủy', tuchoi: 'Từ chối' };
   var quyenNV = { nv: ['xingia'] };
   function quyenCua(s) { return !s ? [] : s.role === 'admin' ? Object.keys(TEN_QUYEN) : s.role === 'nv' ? (quyenNV[s.username] || []) : []; }
@@ -81,21 +101,15 @@
     }
     if (action === 'getTonKho') {
       if (!sess) return tre({ status: 'error', msg: 'need_login' });
-      var t = sao(ton), giu = {};
-      var giuDs = {};
-      donDemo.forEach(function (d) { if (['moi', 'giu', 'xacnhan', 'danggiao'].indexOf(d.tt) >= 0) d.items.forEach(function (x) { giu[x.ma] = (giu[x.ma] || 0) + x.sl; (giuDs[x.ma] = giuDs[x.ma] || []).push({ don: d.ma, ten: d.nguoiTao || d.user, kh: d.chuaCho, ch: d.ten, loai: d.loai, tt: d.tt, han: d.han, sl: x.sl, dv: x.dv }); }); });
-      Object.keys(giu).forEach(function (m) {
-        var d = t[m]; if (!d) return;
-        d.tonGoc = d.tong; d.giu = giu[m]; d.giuDs = giuDs[m]; d.tong = Math.max(0, d.tong - giu[m]);
-        var con = giu[m]; ['nhanh', 'mai', 'cho'].forEach(function (k) { var b = Math.min(d.tier[k], con); d.tier[k] -= b; con -= b; });
-        if (sess.role === 'khachhang') { delete d.giu; delete d.tonGoc; }
-      });
+      var t = tonDayDu(), giu = {}, giuDs = {};
+      if (false) donDemo.forEach(function (d) { if (['moi', 'giu', 'xacnhan', 'danggiao'].indexOf(d.tt) >= 0) d.items.forEach(function (x) { giu[x.ma] = (giu[x.ma] || 0) + x.sl; (giuDs[x.ma] = giuDs[x.ma] || []).push({ don: d.ma, ten: d.nguoiTao || d.user, kh: d.chuaCho, ch: d.ten, loai: d.loai, tt: d.tt, han: d.han, sl: x.sl, dv: x.dv }); }); });
+      if (sess.role === 'khachhang') Object.keys(t).forEach(function (m) { delete t[m].giu; delete t[m].tonGoc; delete t[m].soKho; delete t[m].tonMoc; });
       if (sess.role === 'khachhang') Object.keys(t).forEach(function (m) {
         var d = t[m], c = function (n) { return Math.min(n, 51); };
         t[m] = { tong: c(d.tong), dvt: d.dvt, tier: { nhanh: c(d.tier.nhanh), mai: c(d.tier.mai), cho: c(d.tier.cho) } };
       });
       if (sess.role !== 'khachhang') Object.keys(t).forEach(function (m) { apNgayDemo(t[m], m); });
-      return tre({ status: 'ok', data: t, luc: new Date().toISOString() });
+      return tre({ status: 'ok', data: t, luc: new Date().toISOString(), moc: sess.role === 'khachhang' ? undefined : { luc: mocDemo.luc, nguoi: mocDemo.nguoi, lech: false } });
     }
     // Phiếu nhập kho (giả, trong bộ nhớ)
     if (action === 'dsPhieuNhap') return tre(coQ(sess, 'nhapton') ? { status: 'ok', data: sao(phieuDemo).sort(function (a, b) { return a.ngay < b.ngay ? 1 : -1; }), ngayTay: sao(ngayTayDemo) } : { status: 'error', msg: 'forbidden' });
@@ -144,13 +158,17 @@
       if (loiXin) return tre({ status: 'error', msg: loiXin });
       if (coXin && !String(p.lyDoGia || '').trim()) return tre({ status: 'error', msg: 'Nhập lý do xin giá (vd: khách quen, công trình lớn) để quản trị chốt.' });
       var giaTT = coXin ? (sess.role === 'admin' ? 'chot' : 'cho') : '';
+      var tD = tonDayDu(), thieuDs = [];
+      its.forEach(function (x) { var d = tD[x.ma], con = d ? d.tong : 0; if (x.sl > con + 1e-9) thieuDs.push({ ma: x.ma, can: x.sl, con: con, dv: x.dv }); });
+      if (thieuDs.length && sess.role === 'khachhang') return tre({ status: 'error', msg: 'Không đủ hàng để đặt: ' + thieuDs.map(function (z) { return z.ma + ' (còn ' + z.con + ' ' + z.dv + ', bạn đặt ' + z.can + ')'; }).join('; ') + '. Vui lòng giảm số lượng hoặc liên hệ công ty.' });
+      var thieuTxt = thieuDs.map(function (z) { return z.ma + ': cần ' + z.can + ', còn ' + z.con + ' ' + z.dv; }).join('; ');
       var ma = 'HA261105-' + ('00' + (donDemo.length + 1)).slice(-3), chua = p.loai === 'chua', cfg = chuaCfg.filter(function (c) { return c.ngay === Number(p.soNgay); })[0];
       if (chua && !cfg) return tre({ status: 'error', msg: 'Số ngày chừa không hợp lệ.' });
       donDemo.unshift({ ma: ma, ngay: new Date().toISOString(), tt: 'moi', user: sess.username, ten: p.tenKH, sdt: p.sdt, hinhThuc: p.hinhThuc === 'nhan' ? 'Nhận tại kho' : 'Giao tận nơi',
         diaChi: p.diaChi, ngayCan: p.ngayCan, ghiChu: p.ghiChu, tong: tong, items: its, xuLy: '', ghiChuNB: '',
-        loai: chua ? 'chua' : '', chuaCho: chua ? String(p.chuaCho || '').trim() : '', nguoiTao: (sess.name || sess.username).replace(' (thử)', ''), soNgay: chua ? cfg.ngay : 0, coc: chua && cfg.coc ? Math.round(tong * cfg.coc / 100000) * 1000 : 0, daCoc: 0, han: '', xinGH: 0, giaTT: giaTT, tongGoc: coXin ? tongGoc : 0, lyDoGia: coXin ? String(p.lyDoGia).trim() : '', nguoiChot: giaTT === 'chot' ? sess.username : '', lucChot: '', ghiChuChot: '' });
+        loai: chua ? 'chua' : '', chuaCho: chua ? String(p.chuaCho || '').trim() : '', nguoiTao: (sess.name || sess.username).replace(' (thử)', ''), soNgay: chua ? cfg.ngay : 0, coc: chua && cfg.coc ? Math.round(tong * cfg.coc / 100000) * 1000 : 0, daCoc: 0, han: '', xinGH: 0, thieu: thieuTxt, giaTT: giaTT, tongGoc: coXin ? tongGoc : 0, lyDoGia: coXin ? String(p.lyDoGia).trim() : '', nguoiChot: giaTT === 'chot' ? sess.username : '', lucChot: '', ghiChuChot: '' });
       ghiNK(sess, chua ? 'Gửi yêu cầu chừa hàng' : 'Gửi đơn', ma, its.length + ' mã' + (coXin ? ' · XIN GIÁ: ' + p.lyDoGia : ''));
-      return tre({ status: 'ok', ma: ma, tong: tong, giaTT: giaTT });
+      return tre({ status: 'ok', ma: ma, tong: tong, giaTT: giaTT, thieu: thieuTxt });
     }
     if (action === 'donCuaToi') return tre({ status: 'ok', data: donDemo.filter(function (d) { return d.user === (sess && sess.username); }).map(function (d) { return anVon(d, false); }), quyen: quyenCua(sess) });
     if (action === 'dsDon') {
@@ -158,6 +176,53 @@
       var dem = { moi: 0, giu: 0, xacnhan: 0, danggiao: 0, dagiao: 0, huy: 0, tuchoi: 0, hetHan: 0, xinGH: 0, xinGia: 0 };
       donDemo.forEach(function (d) { dem[d.tt]++; if (d.giaTT === 'cho' && (d.tt === 'moi' || d.tt === 'giu')) dem.xinGia++; if (d.tt === 'giu' && d.han && new Date(d.han) < new Date()) dem.hetHan++; if (d.tt === 'giu' && d.xinGH) dem.xinGH++; });
       return tre({ status: 'ok', data: donDemo.filter(function (d) { return !p.tt || d.tt === p.tt; }).map(function (d) { return anVon(d, sess.role === 'admin'); }), dem: dem, chuaCfg: sao(chuaCfg), quyen: quyenCua(sess), tenQuyen: TEN_QUYEN });
+    }
+    if (action === 'giaoHang') {
+      if (!sess || !coQ(sess, 'giao')) return tre({ status: 'error', msg: 'Tài khoản chưa có quyền: ' + TEN_QUYEN.giao });
+      var dh = donDemo.filter(function (d) { return d.ma === p.ma; })[0];
+      if (!dh) return tre({ status: 'error', msg: 'Không thấy đơn' });
+      if (['xacnhan', 'danggiao', 'dagiao'].indexOf(dh.tt) < 0) return tre({ status: 'error', msg: 'Chỉ ghi nhận giao hàng cho đơn đã xác nhận / đang giao.' });
+      var muc = p.items || {}, nk2 = [], du = true, rowsSK = [];
+      for (var iq = 0; iq < dh.items.length; iq++) {
+        var xq = dh.items[iq], daq = Number(xq.slGiao) || 0, mt = p.giaDu ? xq.sl : (muc[xq.ma] !== undefined && muc[xq.ma] !== '' ? Number(muc[xq.ma]) : daq);
+        if (!(mt >= 0) || mt > xq.sl + 1e-9) return tre({ status: 'error', msg: 'Mã ' + xq.ma + ': số thực giao phải từ 0 đến ' + xq.sl + '.' });
+        xq._mt = Math.round(mt * 100) / 100;
+      }
+      dh.items.forEach(function (x) {
+        var delta = Math.round((x._mt - (Number(x.slGiao) || 0)) * 100) / 100;
+        if (delta !== 0) { soKhoDemo.push({ luc: new Date().toISOString(), loai: delta > 0 ? 'Xuất kho giao hàng' : 'Hoàn kho (hàng trả về)', ct: dh.ma, ma: x.ma, ten: x.ten, sl: -delta, dv: x.dv, kho: 'Kho chính', nguoi: sess.username, gc: delta > 0 ? 'giao đơn ' + dh.ma : 'hàng trả về đơn ' + dh.ma }); nk2.push(x.ma + ' ' + (delta > 0 ? '+' : '') + delta); }
+        x.slGiao = x._mt; delete x._mt; if (x.slGiao < x.sl - 1e-9) du = false;
+      });
+      if (!nk2.length && !p.ketThuc) return tre({ status: 'ok', msg: 'Không có gì thay đổi' });
+      if (p.ketThuc && dh.items.every(function (x) { return !(x.slGiao > 0); })) return tre({ status: 'error', msg: 'Chưa giao mặt hàng nào – nếu không giao nữa hãy Hủy đơn (nhả hàng).' });
+      var ttm = (p.ketThuc || du || dh.tt === 'dagiao') ? 'dagiao' : 'danggiao';
+      if (ttm === 'dagiao') { var tg = 0; dh.items.forEach(function (x) { var heso = x.sl > 0 && x.qd ? parseFloat(x.qd) / x.sl : 1; x.tienGiao = Math.round(x.slGiao * heso * x.dongia); tg += x.tienGiao; }); dh.tong = tg; if (dh.tt !== 'dagiao') dh.ngayGiao = new Date().toISOString(); }
+      dh.tt = ttm; if (p.nguoiGiao) dh.nguoiGiao = p.nguoiGiao;
+      ghiNK(sess, ttm === 'dagiao' ? 'Đã giao' : 'Giao một phần', dh.ma, nk2.join(' · '));
+      return tre({ status: 'ok', tt: ttm, tong: dh.tong, msg: 'Đơn ' + dh.ma + (ttm === 'dagiao' ? ': đã giao xong, trừ kho theo số thực giao (' + dh.tong.toLocaleString('vi-VN') + 'đ)' : ': đã ghi nhận giao một phần, phần còn lại vẫn được giữ') });
+    }
+    if (action === 'theKho') {
+      if (!sess || (sess.role !== 'admin' && sess.role !== 'nv')) return tre({ status: 'error', msg: 'forbidden' });
+      var t0k = new Date(mocDemo.luc).getTime(), mk = { luc: mocDemo.luc, nguoi: mocDemo.nguoi, gc: mocDemo.gc, lech: false };
+      if (!p.ma) return tre({ status: 'ok', moc: mk, ds: sao(soKhoDemo).reverse().slice(0, 100) });
+      var tk = tonDayDu(), dk = tk[p.ma];
+      var dsk = soKhoDemo.filter(function (r) { return r.ma === p.ma; }).reverse().map(function (r) { var o = sao(r); o.sauMoc = new Date(r.luc).getTime() >= t0k; return o; });
+      return tre({ status: 'ok', ma: p.ma, moc: mk, tt: dk ? { dvt: dk.dvt, tonMoc: dk.tonMoc !== undefined ? dk.tonMoc : (dk.tonGoc !== undefined ? dk.tonGoc : dk.tong), soKho: dk.soKho || { xuat: 0, hoan: 0, nhap: 0, dc: 0 }, tonThat: dk.tonGoc !== undefined ? dk.tonGoc : dk.tong, giu: dk.giu || 0, duocBan: dk.tong, am: 0 } : null, ds: dsk, giu: dk && dk.giuDs ? dk.giuDs : [] });
+    }
+    if (action === 'chotMoc') {
+      if (!sess || !coQ(sess, 'nhapton')) return tre({ status: 'error', msg: 'forbidden' });
+      mocDemo = { luc: new Date().toISOString(), nguoi: sess.username, gc: p.gc || '' }; ghiNK(sess, 'Chốt mốc tồn', '', p.gc || '');
+      return tre({ status: 'ok', msg: 'Đã chốt mốc tồn – các biến động trước đó không tính nữa.' });
+    }
+    if (action === 'dieuChinhTon') {
+      if (!sess || !coQ(sess, 'nhapton')) return tre({ status: 'error', msg: 'forbidden' });
+      var tdc = tonDayDu(), ddc = tdc[p.ma], thuc = Number(p.thucDem);
+      if (!ddc || !(thuc >= 0)) return tre({ status: 'error', msg: 'Nhập mã hàng và số đếm thực tế (≥ 0).' });
+      var ht = ddc.tonGoc !== undefined ? ddc.tonGoc : ddc.tong, dl = Math.round((thuc - ht) * 100) / 100;
+      if (!dl) return tre({ status: 'ok', msg: 'Số đếm khớp với số hệ thống (' + ht + ') – không cần điều chỉnh.' });
+      soKhoDemo.push({ luc: new Date().toISOString(), loai: 'Điều chỉnh kiểm kê', ct: 'KK', ma: p.ma, ten: ddc.ten || '', sl: dl, dv: ddc.dvt, kho: 'Kho chính', nguoi: sess.username, gc: p.lyDo || 'kiểm kê' });
+      ghiNK(sess, 'Kiểm kê tồn', '', p.ma + ': ' + ht + ' → ' + thuc);
+      return tre({ status: 'ok', msg: 'Đã điều chỉnh ' + p.ma + ': ' + ht + ' → ' + thuc + ' (' + (dl > 0 ? '+' : '') + dl + ')' });
     }
     if (action === 'chotGia') {
       if (!sess || !coQ(sess, 'chotgia')) return tre({ status: 'error', msg: 'forbidden' });
@@ -180,6 +245,7 @@
       if (dd.giaTT === 'cho' && ['giu', 'xacnhan', 'danggiao', 'dagiao'].indexOf(p.tt) >= 0) return tre({ status: 'error', msg: 'Đơn đang chờ chốt giá – chốt (hoặc từ chối) giá trước khi duyệt đơn.' });
       var noiBo = sess.role === 'admin' || sess.role === 'nv';
       if (!noiBo && !(dd.user === sess.username && p.tt === 'huy' && dd.tt === 'moi')) return tre({ status: 'error', msg: 'forbidden' });
+      if (p.tt === 'dagiao' && dd.tt !== 'dagiao' && !p.giaoXong) return window.DEMO_API('giaoHang', { ma: dd.ma, giaDu: 1, nguoiGiao: p.nguoiGiao }, sess);
       var qTT = p.tt === 'giu' || dd.tt === 'giu' || (dd.loai === 'chua' && ['moi', 'huy', 'tuchoi'].indexOf(dd.tt) >= 0) ? 'chua' : ((p.tt === 'danggiao' || p.tt === 'dagiao') && (dd.tt === 'xacnhan' || dd.tt === 'danggiao')) ? 'giao' : 'don';
       if (p.tt === 'danggiao' && p.nguoiGiao) dd.nguoiGiao = p.nguoiGiao;
       if (p.tt === 'dagiao') dd.ngayGiao = new Date().toISOString();

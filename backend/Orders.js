@@ -12,8 +12,8 @@ var TAB_DON = 'Đơn hàng', TAB_CT = 'Chi tiết đơn', TAB_CAI_CHUA = 'Cài �
 var TD_DON = ['Mã đơn', 'Ngày đặt', 'Trạng thái', 'Tài khoản', 'Đại lý / cửa hàng', 'SĐT', 'Hình thức', 'Địa chỉ giao', 'Ngày cần hàng',
   'Ghi chú khách', 'Số mặt hàng', 'Tổng tiền', 'Người xử lý', 'Cập nhật lúc', 'Ghi chú nội bộ', 'Chi tiết (máy)',
   'Loại', 'Số ngày chừa', 'Hạn chừa', 'Cọc yêu cầu', 'Đã nhận cọc', 'Xin gia hạn (ngày)', 'Người giao', 'Ngày giao', 'Chừa cho khách', 'Người tạo đơn',
-  'Trạng thái giá', 'Tổng tiền gốc', 'Lý do xin giá', 'Người chốt giá', 'Lúc chốt giá', 'Ghi chú chốt giá'];
-var TD_CT = ['Mã đơn', 'Ngày đặt', 'Tài khoản', 'Mã hàng', 'Tên hàng', 'Số lượng', 'Đơn vị', 'Quy đổi', 'Đơn giá', 'Thành tiền', 'Giá gốc', 'Giá xin'];
+  'Trạng thái giá', 'Tổng tiền gốc', 'Lý do xin giá', 'Người chốt giá', 'Lúc chốt giá', 'Ghi chú chốt giá', 'Thiếu hàng'];
+var TD_CT = ['Mã đơn', 'Ngày đặt', 'Tài khoản', 'Mã hàng', 'Tên hàng', 'Số lượng', 'Đơn vị', 'Quy đổi', 'Đơn giá', 'Thành tiền', 'Giá gốc', 'Giá xin', 'Đã giao'];
 var TRANG_THAI = { moi: 'Mới – chờ duyệt', giu: 'Đang chừa hàng', xacnhan: 'Đã xác nhận', danggiao: 'Đang giao', dagiao: 'Đã giao', huy: 'Đã hủy', tuchoi: 'Từ chối' };
 var LOAI_CHUA = 'Chừa hàng';
 // Xin sửa giá (nhân viên đề xuất giá tay / % giảm trên giá niêm yết -> quản trị chốt). '' = đơn giá bình thường.
@@ -111,7 +111,8 @@ function taoDon(p, ti) {
   if (gia.status !== 'ok') return gia;
   var theoMa = {}; gia.data.forEach(function (g) { theoMa[g.ma] = g; });
 
-  var dong = [], tong = 0, tongGoc = 0, coXin = false;
+  var dong = [], tong = 0, tongGoc = 0, coXin = false, thieuDs = [];
+  var tonKho = null; try { var tkd = tonKhoDayDu(); if (tkd.status === 'ok') tonKho = tkd.data; } catch (e) { Logger.log('Kiểm tồn lỗi: ' + e); }
   var duocXin = ti.role === 'admin' || coQuyen(ti, 'xingia'), lyDoGia = chu(p.lyDoGia).slice(0, 200);
   for (var i = 0; i < items.length; i++) {
     var g = theoMa[items[i].ma];
@@ -134,9 +135,17 @@ function taoDon(p, ti) {
     var luong = m2 ? Math.round(sl * m2 * 100) / 100 : sl;
     var tien = Math.round(luong * dongia);
     tong += tien; tongGoc += Math.round(luong * gia0);
+    if (tonKho) { // Được bán = Tồn thực − hàng đang giữ
+      var dT = tonKho[g.ma], conLai = dT ? Number(dT.tong) || 0 : 0, can = (dT && dT.dvt === 'thùng') || !m2 ? sl : luong;
+      if (can > conLai + 1e-9) thieuDs.push({ ma: g.ma, can: lam3(can), con: lam3(conLai), dv: (dT && dT.dvt) || g.dvt || '' });
+    }
     dong.push({ ma: g.ma, ten: g.tenGoc || g.ten, sl: sl, dv: m2 ? 'thùng' : (g.dvt || ''), qd: m2 ? luong + ' m²' : '', dongia: dongia, tien: tien, dvGia: g.dvt || '', gia0: gia0, giaXin: giaXin, ny: g.ny || 0, von: g.von || 0 });
   }
   if (coXin && !lyDoGia) return { status: 'error', msg: 'Nhập lý do xin giá (vd: khách quen, công trình lớn) để quản trị chốt.' };
+  // Đại lý không được đặt vượt "Được bán"; nhân viên / quản trị vẫn gửi được nhưng đơn gắn cờ THIẾU HÀNG.
+  if (thieuDs.length && ti.role === 'khachhang') return { status: 'error', msg: 'Không đủ hàng để đặt: ' + thieuDs.map(function (t) { return t.ma + ' (còn ' + t.con + ' ' + t.dv + ', bạn đặt ' + t.can + ')'; }).join('; ') + '. Vui lòng giảm số lượng hoặc liên hệ công ty.' };
+  var thieuTxt = thieuDs.map(function (t) { return t.ma + ': cần ' + t.can + ', còn ' + t.con + ' ' + t.dv; }).join('; ');
+  if (thieuDs.length) dong.forEach(function (x) { var t = thieuDs.filter(function (z) { return z.ma === x.ma; })[0]; if (t) x.thieu = lam3(t.can - t.con); });
   var giaTT = coXin ? (ti.role === 'admin' ? 'chot' : 'cho') : '';
   var u = thongTinUser(ti.user);
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
@@ -145,7 +154,7 @@ function taoDon(p, ti) {
     var don = {
       ma: ma, ngay: luc.toISOString(), tt: 'moi', user: ti.user, ten: chu(p.tenKH) || u.cty || u.ten || ti.user, sdt: chu(p.sdt) || u.sdt,
       hinhThuc: p.hinhThuc === 'nhan' ? 'Nhận tại kho' : 'Giao tận nơi', diaChi: chu(p.diaChi) || u.diaChi, ngayCan: chu(p.ngayCan), ghiChu: chu(p.ghiChu).slice(0, 500),
-      tong: tong, items: dong, loai: chua ? 'chua' : '', soNgay: chua ? soNgay : 0, coc: chua ? tienCoc(tong, soNgay) : 0, chuaCho: chuaCho, nguoiTao: u.ten || ti.user, user: ti.user, giaTT: giaTT, tongGoc: tongGoc, lyDoGia: coXin ? lyDoGia : ''
+      tong: tong, items: dong, loai: chua ? 'chua' : '', soNgay: chua ? soNgay : 0, coc: chua ? tienCoc(tong, soNgay) : 0, chuaCho: chuaCho, nguoiTao: u.ten || ti.user, user: ti.user, giaTT: giaTT, tongGoc: tongGoc, lyDoGia: coXin ? lyDoGia : '', thieu: thieuTxt
     };
     themDongTheoTen(tabDon(TAB_DON, TD_DON), {
       'Mã đơn': ma, 'Ngày đặt': luc, 'Trạng thái': TRANG_THAI.moi, 'Tài khoản': "'" + ti.user, 'Đại lý / cửa hàng': don.ten, 'SĐT': "'" + don.sdt,
@@ -153,15 +162,15 @@ function taoDon(p, ti) {
       'Tổng tiền': tong, 'Cập nhật lúc': luc, 'Chi tiết (máy)': JSON.stringify(dong),
       'Loại': chua ? LOAI_CHUA : 'Đặt hàng', 'Số ngày chừa': chua ? soNgay : '', 'Cọc yêu cầu': chua ? don.coc : '', 'Chừa cho khách': chuaCho, 'Người tạo đơn': don.nguoiTao,
       'Trạng thái giá': giaTT ? TT_GIA[giaTT] : '', 'Tổng tiền gốc': coXin ? tongGoc : '', 'Lý do xin giá': coXin ? lyDoGia : '',
-      'Người chốt giá': giaTT === 'chot' ? "'" + ti.user : '', 'Lúc chốt giá': giaTT === 'chot' ? luc : ''
+      'Người chốt giá': giaTT === 'chot' ? "'" + ti.user : '', 'Lúc chốt giá': giaTT === 'chot' ? luc : '', 'Thiếu hàng': thieuTxt
     });
-    var ct = tabDon(TAB_CT, TD_CT), rows = dong.map(function (d) { return [ma, luc, "'" + ti.user, d.ma, d.ten, d.sl, d.dv, d.qd, d.dongia, d.tien, d.giaXin ? d.gia0 : '', d.giaXin || '']; });
+    var ct = tabDon(TAB_CT, TD_CT), rows = dong.map(function (d) { return [ma, luc, "'" + ti.user, d.ma, d.ten, d.sl, d.dv, d.qd, d.dongia, d.tien, d.giaXin ? d.gia0 : '', d.giaXin || '', 0]; });
     ct.getRange(ct.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
   } finally { lock.releaseLock(); }
   demXoa('giu');
-  ghiNhatKy(ti, chua ? 'Gửi yêu cầu chừa hàng' : 'Gửi đơn', ma, dong.length + ' mã · ' + tienVN(tong) + (coXin ? ' · XIN GIÁ (gốc ' + tienVN(tongGoc) + '): ' + lyDoGia : '') + (chua ? ' · chừa ' + soNgay + ' ngày' + (chuaCho ? ' · cho khách: ' + chuaCho : '') : ''));
+  ghiNhatKy(ti, chua ? 'Gửi yêu cầu chừa hàng' : 'Gửi đơn', ma, dong.length + ' mã · ' + tienVN(tong) + (coXin ? ' · XIN GIÁ (gốc ' + tienVN(tongGoc) + '): ' + lyDoGia : '') + (thieuTxt ? ' · THIẾU HÀNG: ' + thieuTxt : '') + (chua ? ' · chừa ' + soNgay + ' ngày' + (chuaCho ? ' · cho khách: ' + chuaCho : '') : ''));
   try { baoDonMoi(don); } catch (e) { Logger.log('Báo đơn lỗi: ' + e); }
-  return { status: 'ok', ma: don.ma, tong: tong, coc: don.coc, giaTT: giaTT, msg: (chua ? 'Đã gửi yêu cầu chừa hàng ' : 'Đã gửi đơn ') + don.ma };
+  return { status: 'ok', ma: don.ma, tong: tong, coc: don.coc, giaTT: giaTT, thieu: thieuTxt, msg: (chua ? 'Đã gửi yêu cầu chừa hàng ' : 'Đã gửi đơn ') + don.ma };
 }
 
 function thongTinUser(user) {
@@ -197,7 +206,7 @@ function docDon(loc, gioiHan) {
     dc: ['Địa chỉ giao'], can: ['Ngày cần hàng'], gc: ['Ghi chú khách'], so: ['Số mặt hàng'], tong: ['Tổng tiền'], xl: ['Người xử lý'],
     cn: ['Cập nhật lúc'], nb: ['Ghi chú nội bộ'], ct: ['Chi tiết (máy)'],
     loai: ['Loại'], sn: ['Số ngày chừa'], han: ['Hạn chừa'], coc: ['Cọc yêu cầu'], dacoc: ['Đã nhận cọc'], xin: ['Xin gia hạn (ngày)'], ng: ['Người giao'], ngg: ['Ngày giao'], nc: ['Chừa cho khách', 'Người chừa'], nt: ['Người tạo đơn'],
-    gtt: ['Trạng thái giá'], tgoc: ['Tổng tiền gốc'], ldg: ['Lý do xin giá'], ncg: ['Người chốt giá'], lcg: ['Lúc chốt giá'], gcg: ['Ghi chú chốt giá']
+    thh: ['Thiếu hàng'], gtt: ['Trạng thái giá'], tgoc: ['Tổng tiền gốc'], ldg: ['Lý do xin giá'], ncg: ['Người chốt giá'], lcg: ['Lúc chốt giá'], gcg: ['Ghi chú chốt giá']
   });
   var maTT = {}; Object.keys(TRANG_THAI).forEach(function (k) { maTT[TRANG_THAI[k]] = k; });
   var maGia = {}; Object.keys(TT_GIA).forEach(function (k) { maGia[TT_GIA[k]] = k; });
@@ -222,7 +231,7 @@ function docDon(loc, gioiHan) {
       ghiChuNB: loc.noiBo ? chu(o('nb')) : '', items: items,
       loai: chu(o('loai')) === LOAI_CHUA ? 'chua' : '', soNgay: Number(o('sn')) || 0, han: iso(o('han')),
       coc: Number(o('coc')) || 0, daCoc: Number(o('dacoc')) || 0, xinGH: Number(o('xin')) || 0, nguoiGiao: chu(o('ng')), ngayGiao: iso(o('ngg')), chuaCho: chu(o('nc')), nguoiTao: chu(o('nt')) || tenCua(tkD),
-      giaTT: maGia[chu(o('gtt'))] || '', tongGoc: Number(o('tgoc')) || 0, lyDoGia: chu(o('ldg')), nguoiChot: tkGoc(o('ncg')), lucChot: iso(o('lcg')), ghiChuChot: chu(o('gcg')), _dong: i + 1 });
+      thieu: chu(o('thh')), giaTT: maGia[chu(o('gtt'))] || '', tongGoc: Number(o('tgoc')) || 0, lyDoGia: chu(o('ldg')), nguoiChot: tkGoc(o('ncg')), lucChot: iso(o('lcg')), ghiChuChot: chu(o('gcg')), _dong: i + 1 });
     anVonDon(ds[ds.length - 1], loc.admin);
   }
   return ds;
@@ -268,6 +277,7 @@ function capNhatDon(p, ti) {
   try {
     var d = docDon({ noiBo: true, admin: true }, 5000).filter(function (x) { return x.ma === chu(p.ma); })[0];
     if (!d) return { status: 'error', msg: 'Không thấy đơn ' + p.ma };
+    if (tt === 'dagiao' && d.tt !== 'dagiao' && !p.giaoXong) { lock.releaseLock(); lock = null; return giaoHang({ ma: d.ma, giaDu: 1, nguoiGiao: p.nguoiGiao }, ti); }
     if (d.giaTT === 'cho' && ['giu', 'xacnhan', 'danggiao', 'dagiao'].indexOf(tt) >= 0) return { status: 'error', msg: 'Đơn đang chờ chốt giá – chốt (hoặc từ chối) giá trước khi duyệt đơn.' };
     var noiBo = ti.role === 'admin' || ti.role === 'nv';
     if (!noiBo && (d.user !== ti.user || tt !== 'huy' || d.tt !== 'moi')) return { status: 'error', msg: 'forbidden' };
@@ -318,7 +328,7 @@ function capNhatDon(p, ti) {
     if (doiNB) { ghi('Ghi chú nội bộ', chu(p.ghiChuNB).slice(0, 500)); nk.push('ghi chú nội bộ: ' + chu(p.ghiChuNB).slice(0, 200)); }
     if (!nk.length) return { status: 'ok', msg: 'Không có gì thay đổi' };
     ghi('Người xử lý', "'" + ti.user); ghi('Cập nhật lúc', new Date());
-  } finally { lock.releaseLock(); }
+  } finally { if (lock) lock.releaseLock(); }
   demXoa('giu');
   ghiNhatKy(ti, noiBo ? 'Cập nhật đơn' : 'Đại lý tự hủy đơn', d.ma, nk.join(' · '));
   if (doiTT && tt === 'xacnhan') try { baoKho(d); } catch (e) { Logger.log('Báo kho lỗi: ' + e); }
@@ -408,10 +418,13 @@ function giuTheoMa() {
   var giu = {};
   docDon({ cacTT: TT_GIU_HANG }, 5000).forEach(function (d) {
     d.items.forEach(function (x) {
+      var conLai = Math.max(0, (Number(x.sl) || 0) - (Number(x.slGiao) || 0)); // phần đã giao đã trừ tồn thực, không giữ nữa
+      if (conLai <= 0) return;
+      var heSo = Number(x.sl) > 0 ? conLai / Number(x.sl) : 1;
       var g = giu[x.ma] || (giu[x.ma] = { sl: 0, m2: 0, don: 0, ds: [] });
-      if (g.ds.length < 20) g.ds.push({ don: d.ma, ten: d.nguoiTao || d.user, kh: d.chuaCho, ch: d.ten, loai: d.loai, tt: d.tt, han: d.han, sl: Number(x.sl) || 0, dv: x.dv || '' });
-      g.sl = lam3(g.sl + (Number(x.sl) || 0));
-      g.m2 = lam3(g.m2 + (parseFloat(String(x.qd || '').replace(',', '.')) || 0));
+      if (g.ds.length < 20) g.ds.push({ don: d.ma, ten: d.nguoiTao || d.user, kh: d.chuaCho, ch: d.ten, loai: d.loai, tt: d.tt, han: d.han, sl: lam3(conLai), dv: x.dv || '' });
+      g.sl = lam3(g.sl + conLai);
+      g.m2 = lam3(g.m2 + (parseFloat(String(x.qd || '').replace(',', '.')) || 0) * heSo);
       g.don++;
     });
   });
@@ -488,6 +501,7 @@ function baoDonMoi(don) {
   if (don.diaChi) dau.push('Địa chỉ: ' + don.diaChi);
   if (don.sdt) dau.push('SĐT: ' + don.sdt);
   if (don.ghiChu) dau.push('Ghi chú: ' + don.ghiChu);
+  if (don.thieu) dau.push('⚠ THIẾU HÀNG (đơn của nhân viên, cần xử lý): ' + don.thieu);
   if (don.giaTT === 'cho') dau.push('💲 XIN GIÁ – chờ quản trị chốt (giá gốc ' + tienVN(don.tongGoc) + ' → giá xin ' + tienVN(don.tong) + '). Lý do: ' + don.lyDoGia);
   var noiDung = dau.join('\n') + '\n\n' + dongCT.join('\n') + '\n\nDuyệt đơn: ' + link;
   var e = function (x) { return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;'); };

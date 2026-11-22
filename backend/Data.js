@@ -318,9 +318,10 @@ function getAll(ti) {
 }
 
 function getTonKho(ti) {
-  var res = quaDem('tonkho', docTonKho, function () { return layTabTon(false); }, CACHE_GIAY_TON);
-  if (res.status === 'ok') { try { apDungNgayNhap(res.data); } catch (e) { Logger.log('Ngày nhập lỗi: ' + e); } truHangGiu(res.data); } // Được bán = Tồn − hàng đang giữ cho đơn / chừa hàng
-  if (res.status !== 'ok' || ti.role !== 'khachhang') return res;
+  var res = tonKhoDayDu(); // Được bán = Tồn thực (Sheet ± sổ kho) − hàng đang giữ cho đơn / chừa hàng
+  if (res.status !== 'ok') return res;
+  if (ti.role !== 'khachhang') return res;
+  delete res.moc;
   // Đại lý: không gửi tên kho, số lô, số thật – mọi số chặn trần (app hiện "50+").
   var cap = function (n) { return Math.min(Number(n) || 0, TRAN_TON_KHACH); };
   Object.keys(res.data).forEach(function (ma) {
